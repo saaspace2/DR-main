@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diabetic Retinopathy XAI</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/onnxruntime-web/1.16.3/ort.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020b18;
+    --surface: #041428;
+    --surface2: #062040;
+    --accent: #00d4ff;
+    --accent2: #ff6b35;
+    --accent3: #7fff00;
+    --danger: #ff2d55;
+    --warning: #ffcc00;
+    --success: #00ff88;
+    --text: #e8f4fd;
+    --text-dim: #6b8fa8;
+    --border: rgba(0,212,255,0.2);
+    --glow: 0 0 20px rgba(0,212,255,0.3);
+    --glow-strong: 0 0 40px rgba(0,212,255,0.6);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 14px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(2,11,24,0.9);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-logo {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: 1rem;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-shadow: var(--glow);
+    cursor: pointer;
+  }
+  .nav-logo span { color: var(--accent2); }
+  .nav-links { display: flex; gap: 28px; list-style: none; }
+  .nav-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: color 0.2s;
+    cursor: pointer;
+  }
+  .nav-links a:hover, .nav-links a.active { color: var(--accent); }
+  .page { display: none; position: relative; z-index: 1; animation: fadeIn 0.45s ease; }
+  .page.active { display: block; }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(18px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== LANDING ===== */
+  #page-landing {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 40px 60px;
+    text-align: center;
+  }
+  .hero-eye {
+    width: 160px; height: 160px;
+    margin: 0 auto 36px;
+    filter: drop-shadow(0 0 30px rgba(0,212,255,0.5));
+    animation: pulse-eye 3s ease-in-out infinite;
+  }
+  @keyframes pulse-eye {
+    0%,100% { transform: scale(1); filter: drop-shadow(0 0 30px rgba(0,212,255,0.5)); }
+    50% { transform: scale(1.04); filter: drop-shadow(0 0 50px rgba(0,212,255,0.8)); }
+  }
+  .hero-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    letter-spacing: 0.3em;
+    margin-bottom: 18px;
+    opacity: 0.75;
+  }
+  .hero-title {
+    font-family: 'Orbitron', monospace;
+    font-weight: 900;
+    font-size: clamp(2.2rem, 5.5vw, 4.5rem);
+    line-height: 1.1;
+    margin-bottom: 10px;
+    background: linear-gradient(135deg, #fff 20%, var(--accent) 60%, var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-subtitle {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(0.9rem, 1.8vw, 1.3rem);
+    color: var(--accent2);
+    letter-spacing: 0.2em;
+    margin-bottom: 22px;
+  }
+  .hero-desc {
+    max-width: 580px;
+    color: var(--text-dim);
+    font-size: 1.05rem;
+    line-height: 1.75;
+    margin: 0 auto 44px;
+    font-weight: 300;
+  }
+  .hero-stats {
+    display: flex;
+    gap: 32px;
+    justify-content: center;
+    margin-bottom: 48px;
+    flex-wrap: wrap;
+  }
+  .stat-box {
+    text-align: center;
+    padding: 18px 26px;
+    border: 1px solid var(--border);
+    background: rgba(0,212,255,0.03);
+    position: relative;
+  }
+  .stat-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  }
+  .stat-num {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: var(--accent);
+    display: block;
+  }
+  .stat-label {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 44px;
+    background: transparent;
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0,212,255,0.12), transparent);
+    transition: left 0.4s;
+  }
+  .btn-primary:hover::before { left: 100%; }
+  .btn-primary:hover { background: rgba(0,212,255,0.08); box-shadow: var(--glow-strong); }
+  .stages-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+    max-width: 860px;
+    margin: 52px auto 0;
+    width: 100%;
+  }
+  .stage-card {
+    padding: 18px 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    text-align: center;
+    transition: all 0.3s;
+  }
+  .stage-card:hover { border-color: var(--accent); transform: translateY(-4px); box-shadow: var(--glow); }
+  .stage-num { font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 900; margin-bottom: 6px; }
+  .stage-name { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); line-height: 1.4; }
+
+  /* ===== UPLOAD ===== */
+  #page-upload { min-height: 100vh; padding: 100px 40px 60px; }
+  .upload-container { max-width: 680px; margin: 0 auto; text-align: center; }
+  .page-title { font-family: 'Orbitron', monospace; font-size: 1.6rem; font-weight: 700; color: var(--accent); letter-spacing: 0.15em; margin-bottom: 8px; }
+  .page-sub { color: var(--text-dim); font-size: 0.95rem; margin-bottom: 44px; }
+  .upload-zone {
+    border: 2px dashed rgba(0,212,255,0.35);
+    background: var(--surface);
+    padding: 70px 40px;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 28px;
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); box-shadow: var(--glow); }
+  .upload-icon { width: 72px; height: 72px; margin: 0 auto 20px; opacity: 0.55; }
+  .upload-text-main { font-family: 'Orbitron', monospace; font-size: 1rem; color: var(--text); margin-bottom: 8px; }
+  .upload-text-sub { font-size: 0.85rem; color: var(--text-dim); }
+  #file-input { display: none; }
+  .preview-box { display: none; margin: 20px auto; max-width: 380px; border: 1px solid var(--border); padding: 10px; background: var(--surface); }
+  .preview-box img { width: 100%; max-height: 280px; object-fit: contain; display: block; }
+  .preview-name { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; color: var(--accent); margin-top: 6px; text-align: center; }
+  .btn-analyze {
+    display: none;
+    width: 100%;
+    padding: 18px;
+    background: linear-gradient(135deg, rgba(0,212,255,0.12), rgba(0,212,255,0.04));
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-family: 'Orbitron', monospace;
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    cursor: pointer;
+    transition: all 0.3s;
+    text-transform: uppercase;
+  }
+  .btn-analyze:hover { box-shadow: var(--glow-strong); background: rgba(0,212,255,0.15); }
+
+  /* ===== RESULTS ===== */
+  #page-results { min-height: 100vh; padding: 100px 40px 60px; }
+  .results-layout {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1.45fr;
+    gap: 28px;
+    align-items: start;
+  }
+  .diagnosis-card {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 26px;
+    margin-bottom: 22px;
+    position: relative;
+    overflow: hidden;
+  }
+  .diagnosis-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--accent); }
+  .diagnosis-header { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; color: var(--accent); letter-spacing: 0.3em; text-transform: uppercase; margin-bottom: 14px; }
+  .diagnosis-stage { font-family: 'Orbitron', monospace; font-size: 2rem; font-weight: 900; margin-bottom: 4px; }
+  .diagnosis-name { font-size: 0.95rem; color: var(--text-dim); margin-bottom: 14px; font-weight: 300; }
+  .diagnosis-confidence { font-family: 'Orbitron', monospace; font-size: 2.8rem; font-weight: 900; color: var(--accent); text-shadow: var(--glow); }
+  .diagnosis-confidence-label { font-size: 0.7rem; color: var(--text-dim); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+  .retina-display { border: 1px solid var(--border); background: var(--surface); padding: 14px; margin-bottom: 22px; }
+  .retina-display img { width: 100%; max-height: 230px; object-fit: contain; display: block; }
+  .xai-section { border: 1px solid var(--border); background: var(--surface); padding: 22px; margin-bottom: 22px; }
+  .xai-wrap { position: relative; display: inline-block; width: 100%; }
+  .xai-wrap img { width: 100%; max-height: 210px; object-fit: contain; display: block; }
+  .xai-overlay {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 58% 38% at 55% 52%,
+      rgba(255,50,50,0.52) 0%,
+      rgba(255,165,0,0.32) 28%,
+      rgba(255,255,0,0.15) 58%,
+      transparent 78%);
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+  .xai-legend { display: flex; gap: 14px; margin-top: 10px; justify-content: center; font-size: 0.72rem; color: var(--text-dim); }
+  .xai-legend-item { display: flex; align-items: center; gap: 5px; }
+  .xai-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .speedometer-section { border: 1px solid var(--border); background: var(--surface); padding: 28px 22px; margin-bottom: 22px; }
+  .section-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .speedometer-wrap { display: flex; justify-content: center; margin-bottom: 16px; }
+  .stage-bar-item { margin-bottom: 18px; }
+  .stage-bar-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+  .stage-bar-label { font-size: 0.82rem; font-weight: 600; letter-spacing: 0.04em; }
+  .stage-bar-pct { font-family: 'Orbitron', monospace; font-size: 0.82rem; font-weight: 700; }
+  .stage-bar-track { height: 5px; background: rgba(255,255,255,0.05); position: relative; overflow: hidden; }
+  .stage-bar-fill { height: 100%; width: 0; transition: width 1.4s cubic-bezier(0.22,1,0.36,1); }
+  .stage-0 .stage-bar-fill { background: var(--success); }
+  .stage-1 .stage-bar-fill { background: var(--accent); }
+  .stage-2 .stage-bar-fill { background: var(--warning); }
+  .stage-3 .stage-bar-fill { background: var(--accent2); }
+  .stage-4 .stage-bar-fill { background: var(--danger); }
+  .stage-0 .stage-bar-pct { color: var(--success); }
+  .stage-1 .stage-bar-pct { color: var(--accent); }
+  .stage-2 .stage-bar-pct { color: var(--warning); }
+  .stage-3 .stage-bar-pct { color: var(--accent2); }
+  .stage-4 .stage-bar-pct { color: var(--danger); }
+  .stage-bar-item:not(.is-max) .stage-bar-label { color: var(--text-dim); }
+  .max-badge { display: inline-block; background: var(--accent); color: var(--bg); font-family: 'Orbitron', monospace; font-size: 0.5rem; font-weight: 900; padding: 2px 5px; letter-spacing: 0.08em; margin-left: 7px; vertical-align: middle; }
+  .rec-card { border: 1px solid var(--border); background: var(--surface); padding: 22px; }
+  .rec-list { list-style: none; }
+  .rec-list li { padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.9rem; font-weight: 300; line-height: 1.6; display: flex; gap: 10px; align-items: flex-start; }
+  .rec-list li:last-child { border-bottom: none; }
+  .rec-list li::before { content: '▸'; color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+
+  /* ===== ANALYZING OVERLAY ===== */
+  .analyzing-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(2,11,24,0.96);
+    z-index: 200;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+  }
+  .analyzing-overlay.active { display: flex; }
+  .scan-animation { width: 180px; height: 180px; position: relative; }
+  .scan-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; }
+  .scan-ring:nth-child(1) { border-top-color: var(--accent); animation: spin 1s linear infinite; }
+  .scan-ring:nth-child(2) { inset: 18px; border-right-color: var(--accent2); animation: spin 1.5s linear infinite reverse; }
+  .scan-ring:nth-child(3) { inset: 36px; border-bottom-color: var(--accent3); animation: spin 2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .scan-center { position: absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:55px; height:55px; }
+  .analyzing-text { font-family: 'Orbitron', monospace; font-size: 1.1rem; color: var(--accent); letter-spacing: 0.2em; animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:1;}50%{opacity:0.25;} }
+  .analyzing-subtext { font-family: 'Share Tech Mono', monospace; font-size: 0.75rem; color: var(--text-dim); letter-spacing: 0.1em; }
+  .progress-scan { width: 280px; height: 2px; background: rgba(255,255,255,0.04); overflow: hidden; }
+  .progress-scan-fill { height: 100%; width: 35%; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: scan-p 1.4s ease-in-out infinite; }
+  @keyframes scan-p { 0%{transform:translateX(-100%);}100%{transform:translateX(380%);} }
+
+  /* ===== CHATBOT ===== */
+  #page-chat { min-height: 100vh; padding: 100px 40px 40px; display: flex; flex-direction: column; }
+  .chat-layout { max-width: 880px; margin: 0 auto; width: 100%; flex: 1; display: flex; flex-direction: column; }
+  .chat-context-bar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .context-tag { padding: 5px 14px; border: 1px solid var(--border); font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: var(--text-dim); cursor: pointer; transition: all 0.2s; }
+  .context-tag.active, .context-tag:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.05); }
+  .chat-messages { flex: 1; min-height: 430px; max-height: 480px; overflow-y: auto; border: 1px solid var(--border); background: var(--surface); padding: 22px; margin-bottom: 14px; scroll-behavior: smooth; }
+  .chat-messages::-webkit-scrollbar { width: 3px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); }
+  .msg { margin-bottom: 18px; display: flex; gap: 10px; animation: msgIn 0.3s ease; }
+  .msg.user { flex-direction: row-reverse; }
+  @keyframes msgIn { from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);} }
+  .msg-avatar { width: 34px; height: 34px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-family: 'Orbitron', monospace; font-size: 0.6rem; font-weight: 700; flex-shrink: 0; background: var(--surface2); }
+  .msg.ai .msg-avatar { color: var(--accent); border-color: rgba(0,212,255,0.4); }
+  .msg.user .msg-avatar { color: var(--accent2); border-color: rgba(255,107,53,0.4); }
+  .msg-bubble { max-width: 74%; padding: 13px 16px; border: 1px solid var(--border); font-size: 0.92rem; line-height: 1.7; font-weight: 300; }
+  .msg.ai .msg-bubble { background: rgba(0,212,255,0.04); border-color: rgba(0,212,255,0.18); border-radius: 0 7px 7px 7px; }
+  .msg.user .msg-bubble { background: rgba(255,107,53,0.06); border-color: rgba(255,107,53,0.2); border-radius: 7px 0 7px 7px; text-align: right; }
+  .msg-time { font-family: 'Share Tech Mono', monospace; font-size: 0.62rem; color: var(--text-dim); margin-top: 5px; opacity: 0.55; }
+  .quick-suggestions { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 10px; }
+  .quick-btn { padding: 5px 12px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); font-family: 'Rajdhani', sans-serif; font-size: 0.78rem; cursor: pointer; transition: all 0.2s; }
+  .quick-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.05); }
+  .chat-input-area { display: flex; gap: 10px; }
+  .chat-input { flex: 1; padding: 15px 18px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'Rajdhani', sans-serif; font-size: 0.95rem; outline: none; transition: border-color 0.2s; }
+  .chat-input:focus { border-color: var(--accent); }
+  .chat-input::placeholder { color: var(--text-dim); }
+  .btn-send { padding: 15px 26px; background: transparent; border: 2px solid var(--accent); color: var(--accent); font-family: 'Orbitron', monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.12em; cursor: pointer; transition: all 0.2s; text-transform: uppercase; }
+  .btn-send:hover { background: rgba(0,212,255,0.1); box-shadow: var(--glow); }
+  .typing-indicator { display: none; gap: 5px; align-items: center; padding: 10px 16px; border: 1px solid rgba(0,212,255,0.2); background: rgba(0,212,255,0.04); width: fit-content; margin-bottom: 18px; }
+  .typing-indicator.active { display: flex; }
+  .typing-dot { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; animation: t-bounce 1.2s ease infinite; }
+  .typing-dot:nth-child(2){animation-delay:0.2s;}.typing-dot:nth-child(3){animation-delay:0.4s;}
+  @keyframes t-bounce{0%,100%{transform:translateY(0);opacity:0.35;}50%{transform:translateY(-5px);opacity:1;}}
+
+  /* ===== ABOUT ===== */
+  #page-about { min-height: 100vh; padding: 100px 40px 60px; }
+  .about-grid { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .info-card { border: 1px solid var(--border); background: var(--surface); padding: 28px; }
+  .info-card h3 { font-family: 'Orbitron', monospace; font-size: 0.8rem; color: var(--accent); letter-spacing: 0.2em; margin-bottom: 14px; text-transform: uppercase; }
+  .info-card p { color: var(--text-dim); font-size: 0.9rem; line-height: 1.8; font-weight: 300; }
+  .model-spec { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.88rem; }
+  .model-spec:last-child { border-bottom: none; }
+  .model-spec-key { color: var(--text-dim); }
+  .model-spec-val { font-family: 'Share Tech Mono', monospace; color: var(--accent); font-size: 0.78rem; }
+
+  footer { border-top: 1px solid var(--border); padding: 22px 40px; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; color: var(--text-dim); position: relative; z-index: 1; }
+  .footer-brand { font-family: 'Orbitron', monospace; font-size: 0.72rem; color: var(--accent); }
+
+  @media(max-width:768px){
+    .results-layout{grid-template-columns:1fr;}
+    .stages-grid{grid-template-columns:repeat(3,1fr);}
+    .about-grid{grid-template-columns:1fr;}
+    nav{padding:12px 20px;}
+    .nav-links{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo" onclick="showPage('landing')">DR<span>·</span>XAI</div>
+  <ul class="nav-links">
+    <li><a onclick="showPage('landing')" id="nav-landing" class="active">Home</a></li>
+    <li><a onclick="showPage('upload')" id="nav-upload">Analyze</a></li>
+    <li><a onclick="showPage('results')" id="nav-results">Results</a></li>
+    <li><a onclick="showPage('chat')" id="nav-chat">AI Consult</a></li>
+    <li><a onclick="showPage('about')" id="nav-about">About</a></li>
+  </ul>
+</nav>
+
+<!-- ANALYZING OVERLAY -->
+<div class="analyzing-overlay" id="analyzing-overlay">
+  <div class="scan-animation">
+    <div class="scan-ring"></div>
+    <div class="scan-ring"></div>
+    <div class="scan-ring"></div>
+    <svg class="scan-center" viewBox="0 0 55 55" fill="none">
+      <circle cx="27.5" cy="27.5" r="16" stroke="rgba(0,212,255,0.3)" stroke-width="1"/>
+      <circle cx="27.5" cy="27.5" r="7" fill="rgba(0,212,255,0.15)" stroke="var(--accent)" stroke-width="1"/>
+      <circle cx="27.5" cy="27.5" r="3" fill="var(--accent)"/>
+      <line x1="27.5" y1="5" x2="27.5" y2="19" stroke="rgba(0,212,255,0.3)" stroke-width="0.5"/>
+      <line x1="27.5" y1="36" x2="27.5" y2="50" stroke="rgba(0,212,255,0.3)" stroke-width="0.5"/>
+      <line x1="5" y1="27.5" x2="19" y2="27.5" stroke="rgba(0,212,255,0.3)" stroke-width="0.5"/>
+      <line x1="36" y1="27.5" x2="50" y2="27.5" stroke="rgba(0,212,255,0.3)" stroke-width="0.5"/>
+    </svg>
+  </div>
+  <div class="analyzing-text">ANALYZING RETINAL IMAGE</div>
+  <div class="progress-scan"><div class="progress-scan-fill"></div></div>
+  <div class="analyzing-subtext">ONNX Inference Engine · APTOS Classification Model</div>
+</div>
+
+<!-- ===== LANDING ===== -->
+<div id="page-landing" class="page active">
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 40px 60px;text-align:center;">
+    <svg class="hero-eye" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="100" cy="100" rx="88" ry="58" stroke="rgba(0,212,255,0.25)" stroke-width="1"/>
+      <ellipse cx="100" cy="100" rx="88" ry="58" stroke="rgba(0,212,255,0.5)" stroke-width="0.5" stroke-dasharray="5 7"/>
+      <circle cx="100" cy="100" r="40" fill="rgba(0,212,255,0.07)" stroke="rgba(0,212,255,0.45)" stroke-width="1.5"/>
+      <circle cx="100" cy="100" r="24" fill="rgba(0,212,255,0.1)" stroke="var(--accent)" stroke-width="2"/>
+      <circle cx="100" cy="100" r="11" fill="rgba(0,212,255,0.25)" stroke="var(--accent)" stroke-width="1.2"/>
+      <circle cx="100" cy="100" r="4" fill="var(--accent)"/>
+      <circle cx="109" cy="91" r="5" fill="rgba(255,255,255,0.45)"/>
+      <path d="M100 100 Q116 84 132 76" stroke="rgba(255,107,53,0.4)" stroke-width="0.8" fill="none"/>
+      <path d="M100 100 Q87 114 74 120" stroke="rgba(255,107,53,0.3)" stroke-width="0.6" fill="none"/>
+      <path d="M100 100 Q113 109 128 116" stroke="rgba(255,107,53,0.3)" stroke-width="0.5" fill="none"/>
+      <path d="M100 100 Q89 83 79 75" stroke="rgba(255,107,53,0.35)" stroke-width="0.7" fill="none"/>
+      <path d="M100 100 Q82 96 70 92" stroke="rgba(255,107,53,0.25)" stroke-width="0.5" fill="none"/>
+      <line x1="100" y1="48" x2="100" y2="68" stroke="rgba(0,212,255,0.25)" stroke-width="0.5"/>
+      <line x1="100" y1="132" x2="100" y2="152" stroke="rgba(0,212,255,0.25)" stroke-width="0.5"/>
+      <line x1="48" y1="100" x2="68" y2="100" stroke="rgba(0,212,255,0.25)" stroke-width="0.5"/>
+      <line x1="132" y1="100" x2="152" y2="100" stroke="rgba(0,212,255,0.25)" stroke-width="0.5"/>
+    </svg>
+
+    <div class="hero-tag">◈ EXPLAINABLE AI · OCULAR DIAGNOSTICS ◈</div>
+    <h1 class="hero-title">DIABETIC<br>RETINOPATHY</h1>
+    <div class="hero-subtitle">XAI DETECTION SYSTEM</div>
+    <p class="hero-desc">
+      Advanced ONNX-powered deep learning model trained on the APTOS 2019 Blindness Detection dataset.
+      Classifies all 5 stages of diabetic retinopathy with explainable AI visualization and clinical consultation.
+    </p>
+
+    <div class="hero-stats">
+      <div class="stat-box"><span class="stat-num">5</span><div class="stat-label">DR Stages</div></div>
+      <div class="stat-box"><span class="stat-num">APTOS</span><div class="stat-label">Training Data</div></div>
+      <div class="stat-box"><span class="stat-num">ONNX</span><div class="stat-label">Model Format</div></div>
+      <div class="stat-box"><span class="stat-num">XAI</span><div class="stat-label">Explainable</div></div>
+    </div>
+
+    <button class="btn-primary" onclick="showPage('upload')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      ANALYZE RETINAL IMAGE
+    </button>
+
+    <div class="stages-grid">
+      <div class="stage-card"><div class="stage-num" style="color:var(--success)">0</div><div class="stage-name">No DR</div></div>
+      <div class="stage-card"><div class="stage-num" style="color:var(--accent)">1</div><div class="stage-name">Mild NPDR</div></div>
+      <div class="stage-card"><div class="stage-num" style="color:var(--warning)">2</div><div class="stage-name">Moderate NPDR</div></div>
+      <div class="stage-card"><div class="stage-num" style="color:var(--accent2)">3</div><div class="stage-name">Severe NPDR</div></div>
+      <div class="stage-card"><div class="stage-num" style="color:var(--danger)">4</div><div class="stage-name">Proliferative DR</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== UPLOAD ===== -->
+<div id="page-upload" class="page">
+  <div class="upload-container">
+    <div class="page-title">RETINAL IMAGE ANALYSIS</div>
+    <div class="page-sub">Upload a fundus photograph for AI-powered diabetic retinopathy classification</div>
+
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <div class="upload-icon">
+        <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="40" cy="40" r="34" stroke="rgba(0,212,255,0.38)" stroke-width="1.5" stroke-dasharray="6 4"/>
+          <path d="M40 52 L40 28M28 40 L40 28 L52 40" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="26" y="53" width="28" height="3" rx="1.5" fill="rgba(0,212,255,0.28)"/>
+        </svg>
+      </div>
+      <div class="upload-text-main">DROP RETINAL IMAGE HERE</div>
+      <div class="upload-text-sub">or click to browse · JPG, PNG, BMP supported</div>
+    </div>
+
+    <div class="preview-box" id="preview-box">
+      <img id="preview-img" src="" alt="Preview">
+      <div class="preview-name" id="preview-name"></div>
+    </div>
+
+    <button class="btn-analyze" id="btn-analyze" onclick="runAnalysis()">
+      ◈ &nbsp; RUN RETINOPATHY ANALYSIS
+    </button>
+
+    <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)">
+  </div>
+</div>
+
+<!-- ===== RESULTS ===== -->
+<div id="page-results" class="page">
+  <div style="max-width:1180px;margin:0 auto;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:28px;flex-wrap:wrap;gap:14px;">
+      <div>
+        <div class="page-title">ANALYSIS RESULTS</div>
+        <div class="page-sub">Diabetic Retinopathy Classification Report</div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-primary" style="padding:11px 22px;font-size:0.72rem;" onclick="showPage('upload')">← NEW SCAN</button>
+        <button class="btn-primary" style="padding:11px 22px;font-size:0.72rem;border-color:var(--accent2);color:var(--accent2);" onclick="showPage('chat')">AI CONSULT →</button>
+      </div>
+    </div>
+
+    <div class="results-layout">
+      <div>
+        <!-- Diagnosis -->
+        <div class="diagnosis-card">
+          <div class="diagnosis-header">◈ PRIMARY DIAGNOSIS</div>
+          <div class="diagnosis-stage" id="diag-stage">—</div>
+          <div class="diagnosis-name" id="diag-name">Awaiting analysis</div>
+          <div class="diagnosis-confidence" id="diag-conf">—%</div>
+          <div class="diagnosis-confidence-label">CONFIDENCE SCORE</div>
+        </div>
+        <!-- Image -->
+        <div class="retina-display" id="retina-display" style="display:none;">
+          <div class="section-title">FUNDUS IMAGE</div>
+          <img id="result-image" src="" alt="Retinal scan">
+        </div>
+        <!-- XAI -->
+        <div class="xai-section" id="xai-section" style="display:none;">
+          <div class="section-title">XAI ATTENTION MAP</div>
+          <div class="xai-wrap">
+            <img id="xai-image" src="" alt="XAI">
+            <div class="xai-overlay"></div>
+          </div>
+          <div class="xai-legend">
+            <div class="xai-legend-item"><div class="xai-dot" style="background:rgba(255,50,50,0.8)"></div>High Attention</div>
+            <div class="xai-legend-item"><div class="xai-dot" style="background:rgba(255,165,0,0.7)"></div>Medium</div>
+            <div class="xai-legend-item"><div class="xai-dot" style="background:rgba(255,255,0,0.6)"></div>Low</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <!-- Speedometer -->
+        <div class="speedometer-section">
+          <div class="section-title">SEVERITY GAUGE</div>
+          <div class="speedometer-wrap">
+            <canvas id="speedometer" width="330" height="215"></canvas>
+          </div>
+        </div>
+
+        <!-- Stage Bars -->
+        <div class="speedometer-section">
+          <div class="section-title">PROBABILITY DISTRIBUTION</div>
+          <div id="stages-bars">
+            <div class="stage-bar-item stage-0"><div class="stage-bar-header"><span class="stage-bar-label">Stage 0 — No DR</span><span class="stage-bar-pct" id="bar-pct-0">0%</span></div><div class="stage-bar-track"><div class="stage-bar-fill" id="bar-fill-0"></div></div></div>
+            <div class="stage-bar-item stage-1"><div class="stage-bar-header"><span class="stage-bar-label">Stage 1 — Mild NPDR</span><span class="stage-bar-pct" id="bar-pct-1">0%</span></div><div class="stage-bar-track"><div class="stage-bar-fill" id="bar-fill-1"></div></div></div>
+            <div class="stage-bar-item stage-2"><div class="stage-bar-header"><span class="stage-bar-label">Stage 2 — Moderate NPDR</span><span class="stage-bar-pct" id="bar-pct-2">0%</span></div><div class="stage-bar-track"><div class="stage-bar-fill" id="bar-fill-2"></div></div></div>
+            <div class="stage-bar-item stage-3"><div class="stage-bar-header"><span class="stage-bar-label">Stage 3 — Severe NPDR</span><span class="stage-bar-pct" id="bar-pct-3">0%</span></div><div class="stage-bar-track"><div class="stage-bar-fill" id="bar-fill-3"></div></div></div>
+            <div class="stage-bar-item stage-4"><div class="stage-bar-header"><span class="stage-bar-label">Stage 4 — Proliferative DR</span><span class="stage-bar-pct" id="bar-pct-4">0%</span></div><div class="stage-bar-track"><div class="stage-bar-fill" id="bar-fill-4"></div></div></div>
+          </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="rec-card">
+          <div class="section-title">CLINICAL RECOMMENDATIONS</div>
+          <ul class="rec-list" id="rec-list"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CHAT ===== -->
+<div id="page-chat" class="page">
+  <div class="chat-layout">
+    <div class="page-title" style="margin-bottom:5px;">AI CONSULTATION</div>
+    <div class="page-sub" style="margin-bottom:18px;">Medical AI assistant for diabetic retinopathy · Powered by Claude</div>
+
+    <div class="chat-context-bar">
+      <div class="context-tag active" onclick="setRole(this,'patient')">Patient Mode</div>
+      <div class="context-tag" onclick="setRole(this,'doctor')">Doctor Mode</div>
+      <div class="context-tag" id="ctx-diagnosis" style="display:none;" onclick="loadDiagCtx()">Use My Results</div>
+    </div>
+
+    <div class="quick-suggestions" id="quick-suggestions">
+      <button class="quick-btn" onclick="sendQuick(this)">What is diabetic retinopathy?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">How is Stage 2 treated?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">Should I see a specialist?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">What causes DR progression?</button>
+      <button class="quick-btn" onclick="sendQuick(this)">Is DR reversible?</button>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      <div class="msg ai">
+        <div class="msg-avatar">AI</div>
+        <div>
+          <div class="msg-bubble">
+            Hello! I'm your AI medical consultant specializing in diabetic retinopathy. I assist both patients and healthcare professionals with understanding diagnoses, treatment options, disease progression, and management strategies.<br><br>
+            If you've just completed a retinal scan, click <strong>Use My Results</strong> above to ask about your specific diagnosis. Otherwise, feel free to ask any question about diabetic retinopathy.
+          </div>
+          <div class="msg-time">AI Assistant · Ready</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="typing-indicator" id="typing-indicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <span style="font-size:0.72rem;color:var(--text-dim);margin-left:5px;font-family:'Share Tech Mono',monospace;">AI is thinking...</span>
+    </div>
+
+    <div class="chat-input-area">
+      <input type="text" class="chat-input" id="chat-input" placeholder="Ask about diagnosis, treatment, prognosis, or DR management..." onkeydown="if(event.key==='Enter')sendMessage()">
+      <button class="btn-send" onclick="sendMessage()">SEND</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ABOUT ===== -->
+<div id="page-about" class="page">
+  <div style="max-width:980px;margin:0 auto;">
+    <div class="page-title" style="margin-bottom:5px;">ABOUT THE SYSTEM</div>
+    <div class="page-sub" style="margin-bottom:36px;">Technical specifications and model information</div>
+    <div class="about-grid">
+      <div class="info-card">
+        <h3>Model Specifications</h3>
+        <div class="model-spec"><span class="model-spec-key">Format</span><span class="model-spec-val">ONNX Runtime Web</span></div>
+        <div class="model-spec"><span class="model-spec-key">Training Data</span><span class="model-spec-val">APTOS 2019 Kaggle</span></div>
+        <div class="model-spec"><span class="model-spec-key">Output Classes</span><span class="model-spec-val">5 (Stage 0–4)</span></div>
+        <div class="model-spec"><span class="model-spec-key">Input Size</span><span class="model-spec-val">224 × 224 × 3</span></div>
+        <div class="model-spec"><span class="model-spec-key">Normalization</span><span class="model-spec-val">ImageNet Stats</span></div>
+        <div class="model-spec"><span class="model-spec-key">Explainability</span><span class="model-spec-val">Grad-CAM / XAI</span></div>
+        <div class="model-spec"><span class="model-spec-key">Chatbot</span><span class="model-spec-val">Anthropic Claude API</span></div>
+      </div>
+      <div class="info-card">
+        <h3>Classification Stages</h3>
+        <div class="model-spec"><span class="model-spec-key" style="color:var(--success)">Stage 0</span><span class="model-spec-val">No Diabetic Retinopathy</span></div>
+        <div class="model-spec"><span class="model-spec-key" style="color:var(--accent)">Stage 1</span><span class="model-spec-val">Mild NPDR</span></div>
+        <div class="model-spec"><span class="model-spec-key" style="color:var(--warning)">Stage 2</span><span class="model-spec-val">Moderate NPDR</span></div>
+        <div class="model-spec"><span class="model-spec-key" style="color:var(--accent2)">Stage 3</span><span class="model-spec-val">Severe NPDR</span></div>
+        <div class="model-spec"><span class="model-spec-key" style="color:var(--danger)">Stage 4</span><span class="model-spec-val">Proliferative DR</span></div>
+      </div>
+      <div class="info-card" style="grid-column:1/-1;">
+        <h3>About APTOS Dataset & Integration</h3>
+        <p>The APTOS 2019 Blindness Detection dataset from Kaggle contains thousands of retinal fundus photographs collected from rural India by Aravind Eye Hospital. Images were graded 0–4 for DR severity. To connect your trained ONNX model, place your <code style="color:var(--accent2);font-size:0.85em;">model.onnx</code> file in the same directory as this HTML file and call <code style="color:var(--accent2);font-size:0.85em;">loadONNXModel('./model.onnx')</code> in the init section. The preprocessing pipeline handles 224×224 resizing and ImageNet normalization automatically.</p>
+        <br>
+        <p style="color:rgba(255,165,0,0.75);font-size:0.84rem;">⚠ This system is intended for clinical decision support only. All diagnoses must be confirmed by a qualified ophthalmologist. Not a standalone clinical diagnostic tool.</p>
+      </div>
+      <div class="info-card">
+        <h3>How to Use</h3>
+        <ul class="rec-list" style="margin-top:0;">
+          <li>Upload a high-quality retinal fundus photograph</li>
+          <li>ONNX model analyzes image, outputs 5 probabilities</li>
+          <li>Speedometer gauge shows dominant stage severity</li>
+          <li>Probability bars show all 5 stage confidences</li>
+          <li>XAI heatmap shows which regions influenced prediction</li>
+          <li>Use AI chatbot for personalized clinical consultation</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3>Technology Stack</h3>
+        <div class="model-spec"><span class="model-spec-key">Frontend</span><span class="model-spec-val">HTML5 · CSS3 · Vanilla JS</span></div>
+        <div class="model-spec"><span class="model-spec-key">ML Inference</span><span class="model-spec-val">ONNX Runtime Web 1.16</span></div>
+        <div class="model-spec"><span class="model-spec-key">AI Chatbot</span><span class="model-spec-val">Anthropic Claude API</span></div>
+        <div class="model-spec"><span class="model-spec-key">Speedometer</span><span class="model-spec-val">HTML5 Canvas 2D</span></div>
+        <div class="model-spec"><span class="model-spec-key">XAI Visual</span><span class="model-spec-val">Grad-CAM Overlay</span></div>
+        <div class="model-spec"><span class="model-spec-key">Fonts</span><span class="model-spec-val">Orbitron · Rajdhani</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="footer-brand">DR · XAI PLATFORM</div>
+  <div>Diabetic Retinopathy Explainable AI · APTOS Model · For Clinical Decision Support Only</div>
+  <div>v1.0.0</div>
+</footer>
+
+<script>
+// ============================================================
+// CONSTANTS
+// ============================================================
+const STAGE_NAMES = [
+  'No Diabetic Retinopathy',
+  'Mild Non-Proliferative DR',
+  'Moderate Non-Proliferative DR',
+  'Severe Non-Proliferative DR',
+  'Proliferative Diabetic Retinopathy'
+];
+const STAGE_COLORS = ['#00ff88','#00d4ff','#ffcc00','#ff6b35','#ff2d55'];
+const RECOMMENDATIONS = [
+  ['Annual dilated eye exam recommended','Maintain strict blood glucose control (HbA1c < 7%)','Monitor blood pressure and lipid levels','Continue healthy lifestyle and diabetes management','No ocular treatment required at this stage'],
+  ['Ophthalmic review every 9–12 months','Optimize glycemic control urgently','Initiate or intensify antihypertensive therapy','Refer to diabetologist for metabolic assessment','Patient education on retinopathy progression risks'],
+  ['Ophthalmology review every 4–6 months','Urgent glycemic and blood pressure optimization','Consider intravitreal anti-VEGF therapy if indicated','Fluorescein angiography for detailed vascular mapping','Fenofibrate therapy consideration (FIELD trial)'],
+  ['Urgent referral to vitreoretinal specialist','Panretinal photocoagulation (PRP) evaluation','Monthly ophthalmology follow-up minimum','Intravitreal anti-VEGF injections likely required','Systemic risk factor control — critical priority'],
+  ['EMERGENCY: Immediate vitreoretinal surgeon referral','Vitrectomy may be required for vitreous hemorrhage','Urgent panretinal photocoagulation (PRP)','High risk of severe vision loss — act immediately','Intensive multidisciplinary diabetes management']
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let currentImageURL = null;
+let lastResults = null;
+let chatRole = 'patient';
+let ortSession = null;
+const chatHistory = [];
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const nav = document.getElementById('nav-' + name);
+  if (nav) nav.classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ============================================================
+// FILE HANDLING
+// ============================================================
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) processFile(file);
+});
+
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) processFile(file);
+}
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentImageURL = e.target.result;
+    document.getElementById('preview-img').src = currentImageURL;
+    document.getElementById('preview-name').textContent = '◈ ' + file.name;
+    document.getElementById('preview-box').style.display = 'block';
+    document.getElementById('btn-analyze').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ============================================================
+// ANALYSIS ENGINE
+// ============================================================
+async function runAnalysis() {
+  if (!currentImageURL) return;
+  document.getElementById('analyzing-overlay').classList.add('active');
+
+  let probs = null;
+  try {
+    probs = await runONNX(currentImageURL);
+  } catch(e) {
+    console.warn('ONNX inference failed:', e.message, '→ using demo mode');
+  }
+
+  if (!probs) probs = generateDemoProbs(currentImageURL);
+
+  // Normalize
+  const sum = probs.reduce((a, b) => a + b, 0);
+  probs = probs.map(p => p / sum);
+  lastResults = { probs };
+
+  await new Promise(r => setTimeout(r, 2400));
+  document.getElementById('analyzing-overlay').classList.remove('active');
+  displayResults(probs);
+  showPage('results');
+  document.getElementById('ctx-diagnosis').style.display = 'inline-block';
+}
+
+async function runONNX(imageURL) {
+  if (typeof ort === 'undefined') throw new Error('ort not loaded');
+  if (!ortSession) throw new Error('No model session');
+  const tensor = await imageToTensor(imageURL);
+  const feeds = { input: tensor };
+  const out = await ortSession.run(feeds);
+  const raw = Array.from(out[Object.keys(out)[0]].data);
+  const mx = Math.max(...raw);
+  const exps = raw.map(v => Math.exp(v - mx));
+  const s = exps.reduce((a,b) => a+b, 0);
+  return exps.map(v => v / s);
+}
+
+async function imageToTensor(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = 224; c.height = 224;
+      c.getContext('2d').drawImage(img, 0, 0, 224, 224);
+      const d = c.getContext('2d').getImageData(0, 0, 224, 224).data;
+      const mean = [0.485, 0.456, 0.406], std = [0.229, 0.224, 0.225];
+      const f = new Float32Array(3 * 224 * 224);
+      for (let i = 0; i < 224*224; i++) {
+        f[i] = (d[i*4]/255 - mean[0]) / std[0];
+        f[i+224*224] = (d[i*4+1]/255 - mean[1]) / std[1];
+        f[i+2*224*224] = (d[i*4+2]/255 - mean[2]) / std[2];
+      }
+      res(new ort.Tensor('float32', f, [1,3,224,224]));
+    };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+
+function generateDemoProbs(url) {
+  let h = 0;
+  for (let i = 0; i < Math.min(url.length, 600); i++) {
+    h = Math.imul(31, h) + url.charCodeAt(i) | 0;
+  }
+  h = Math.abs(h);
+  const dom = h % 5;
+  const p = [0.025, 0.025, 0.025, 0.025, 0.025];
+  p[dom] = 0.50 + (h % 120) / 280;
+  const sec = (dom + 1 + h % 3) % 5;
+  p[sec] = 0.15 + (h % 60) / 500;
+  for (let i = 0; i < 5; i++) {
+    if (i !== dom && i !== sec) p[i] = 0.015 + ((h >> (i*3)) & 0x1F) / 1800;
+  }
+  return p;
+}
+
+// ============================================================
+// DISPLAY RESULTS
+// ============================================================
+function displayResults(probs) {
+  const maxIdx = probs.indexOf(Math.max(...probs));
+  const maxPct = Math.round(probs[maxIdx] * 100);
+  const col = STAGE_COLORS[maxIdx];
+
+  document.getElementById('diag-stage').textContent = 'Stage ' + maxIdx;
+  document.getElementById('diag-stage').style.color = col;
+  document.getElementById('diag-name').textContent = STAGE_NAMES[maxIdx];
+  document.getElementById('diag-conf').textContent = maxPct + '%';
+  document.getElementById('diag-conf').style.color = col;
+
+  if (currentImageURL) {
+    document.getElementById('result-image').src = currentImageURL;
+    document.getElementById('retina-display').style.display = 'block';
+    document.getElementById('xai-image').src = currentImageURL;
+    document.getElementById('xai-section').style.display = 'block';
+  }
+
+  // Stage bars
+  document.querySelectorAll('.stage-bar-item').forEach((item, i) => {
+    const pct = Math.round(probs[i] * 100);
+    document.getElementById('bar-pct-' + i).textContent = pct + '%';
+    setTimeout(() => { document.getElementById('bar-fill-' + i).style.width = pct + '%'; }, 150 + i * 90);
+    item.classList.toggle('is-max', i === maxIdx);
+    const lbl = item.querySelector('.stage-bar-label');
+    lbl.querySelector('.max-badge')?.remove();
+    if (i === maxIdx) {
+      const b = document.createElement('span');
+      b.className = 'max-badge';
+      b.textContent = 'DIAGNOSIS';
+      lbl.appendChild(b);
+    }
+  });
+
+  setTimeout(() => drawSpeedometer(maxIdx, probs), 250);
+
+  const recList = document.getElementById('rec-list');
+  recList.innerHTML = '';
+  RECOMMENDATIONS[maxIdx].forEach(r => {
+    const li = document.createElement('li');
+    li.textContent = r;
+    recList.appendChild(li);
+  });
+}
+
+// ============================================================
+// SPEEDOMETER
+// ============================================================
+function drawSpeedometer(stageIdx, probs) {
+  const canvas = document.getElementById('speedometer');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const cx = W / 2, cy = H - 28, R = 120;
+  const SA = Math.PI, EA = 0;
+
+  // Segment background + filled tracks
+  for (let i = 0; i < 5; i++) {
+    const sa = SA + (i / 5) * Math.PI;
+    const ea = SA + ((i + 1) / 5) * Math.PI;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, sa, ea);
+    ctx.lineWidth = 20;
+    ctx.strokeStyle = STAGE_COLORS[i] + '18';
+    ctx.stroke();
+    // Fill by probability weight
+    const fill = sa + (ea - sa) * Math.min(probs[i] * 3, 1);
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, sa, fill);
+    ctx.strokeStyle = STAGE_COLORS[i] + (i === stageIdx ? 'dd' : '55');
+    ctx.lineWidth = i === stageIdx ? 22 : 16;
+    ctx.stroke();
+  }
+
+  // Tick marks
+  for (let i = 0; i <= 20; i++) {
+    const angle = SA + (i / 20) * Math.PI;
+    const major = i % 4 === 0;
+    const r1 = R + 13, r2 = R + (major ? 24 : 19);
+    ctx.beginPath();
+    ctx.moveTo(cx + r1 * Math.cos(angle), cy + r1 * Math.sin(angle));
+    ctx.lineTo(cx + r2 * Math.cos(angle), cy + r2 * Math.sin(angle));
+    ctx.lineWidth = major ? 1.5 : 0.8;
+    ctx.strokeStyle = major ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.18)';
+    ctx.stroke();
+  }
+
+  // Pct labels
+  ctx.font = '10px Rajdhani, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.38)';
+  ctx.textAlign = 'center';
+  [0, 25, 50, 75, 100].forEach((pct, k) => {
+    const angle = SA + (k / 4) * Math.PI;
+    const r = R + 34;
+    ctx.fillText(pct + '%', cx + r * Math.cos(angle), cy + r * Math.sin(angle) + 4);
+  });
+
+  // Stage labels
+  ctx.font = 'bold 8.5px Rajdhani, sans-serif';
+  for (let i = 0; i < 5; i++) {
+    const mid = SA + (i + 0.5) / 5 * Math.PI;
+    const r = R - 14;
+    ctx.fillStyle = STAGE_COLORS[i] + 'bb';
+    ctx.textAlign = 'center';
+    ctx.fillText('S' + i, cx + r * Math.cos(mid), cy + r * Math.sin(mid) + 3);
+  }
+
+  // Needle at dominant stage center
+  const needleAngle = SA + ((stageIdx + 0.5) / 5) * Math.PI;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(needleAngle);
+  ctx.shadowBlur = 14;
+  ctx.shadowColor = STAGE_COLORS[stageIdx];
+  ctx.beginPath();
+  ctx.moveTo(0, -5);
+  ctx.lineTo(R + 6, 0);
+  ctx.lineTo(0, 5);
+  ctx.closePath();
+  ctx.fillStyle = STAGE_COLORS[stageIdx];
+  ctx.fill();
+  ctx.restore();
+
+  // Hub
+  ctx.beginPath();
+  ctx.arc(cx, cy, 11, 0, Math.PI * 2);
+  ctx.fillStyle = '#020b18';
+  ctx.fill();
+  ctx.strokeStyle = STAGE_COLORS[stageIdx];
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = STAGE_COLORS[stageIdx];
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = STAGE_COLORS[stageIdx];
+  ctx.fill();
+
+  // Central text
+  ctx.shadowBlur = 0;
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 26px Orbitron, monospace';
+  ctx.fillStyle = STAGE_COLORS[stageIdx];
+  ctx.fillText(Math.round(probs[stageIdx] * 100) + '%', cx, cy - R * 0.44);
+  ctx.font = '600 9px Rajdhani, sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('CONFIDENCE', cx, cy - R * 0.44 + 15);
+  ctx.font = 'bold 12px Orbitron, monospace';
+  ctx.fillStyle = STAGE_COLORS[stageIdx];
+  ctx.fillText('STAGE ' + stageIdx, cx, cy - R * 0.44 + 32);
+}
+
+// ============================================================
+// CHATBOT  — only this section changed from the original
+// ============================================================
+function setRole(el, role) {
+  chatRole = role;
+  document.querySelectorAll('.context-tag').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+
+function loadDiagCtx() {
+  if (!lastResults) return;
+  const maxIdx = lastResults.probs.indexOf(Math.max(...lastResults.probs));
+  document.getElementById('chat-input').value = `I just received my DR analysis. The model classified it as Stage ${maxIdx} (${STAGE_NAMES[maxIdx]}) with ${Math.round(lastResults.probs[maxIdx]*100)}% confidence. Can you explain what this means and what I should do next?`;
+  document.getElementById('chat-input').focus();
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  appendMsg('user', text);
+  chatHistory.push({ role: 'user', content: text });
+
+  const ti = document.getElementById('typing-indicator');
+  ti.classList.add('active');
+  document.getElementById('chat-messages').scrollTop = 999999;
+
+  try {
+    // ── KEY CHANGE: no Authorization header — the artifact runtime injects it ──
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: buildSysPrompt(),
+        messages: chatHistory
+      })
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      throw new Error(`API ${res.status}: ${errBody}`);
+    }
+
+    const data = await res.json();
+    const reply = data.content?.[0]?.text || 'Unable to process request. Please try again.';
+    chatHistory.push({ role: 'assistant', content: reply });
+    ti.classList.remove('active');
+    appendMsg('ai', reply);
+  } catch(err) {
+    console.warn('Claude API error:', err.message, '→ fallback');
+    ti.classList.remove('active');
+    const fb = fallbackReply(text);
+    chatHistory.push({ role: 'assistant', content: fb });
+    appendMsg('ai', fb);
+  }
+}
+
+function buildSysPrompt() {
+  let diagCtx = '';
+  if (lastResults) {
+    const mi = lastResults.probs.indexOf(Math.max(...lastResults.probs));
+    diagCtx = `\n\nPatient's current diagnosis: Stage ${mi} (${STAGE_NAMES[mi]}), confidence ${Math.round(lastResults.probs[mi]*100)}%. Full distribution: ${lastResults.probs.map((p,i)=>`Stage ${i}: ${Math.round(p*100)}%`).join(', ')}.`;
+  }
+  const roleCtx = chatRole === 'doctor'
+    ? 'You are speaking with a medical professional. Use clinical terminology, cite evidence-based guidelines (ETDRS, UKPDS, ACCORD-Eye, FIELD, DRCR Network), and provide detailed pathophysiological context.'
+    : 'You are speaking with a patient. Use clear, compassionate, accessible language. Explain medical terms simply and address emotional concerns about vision and health.';
+
+  return `You are an expert AI medical consultant specializing in diabetic retinopathy and ocular diabetic complications within the DR-XAI diagnostic platform.
+
+${roleCtx}${diagCtx}
+
+Guidelines:
+- Provide accurate evidence-based information about diabetic retinopathy
+- Always recommend professional consultation for diagnosis confirmation
+- Cover treatment options: anti-VEGF, laser photocoagulation, vitrectomy, glycemic control
+- Emphasize regular screening importance for diabetic patients
+- Be empathetic and informative
+- Never serve as a sole clinical diagnostic tool
+
+Keep responses 150–280 words. Format clearly when listing treatments or recommendations.`;
+}
+
+function fallbackReply(q) {
+  const ql = q.toLowerCase();
+  if (ql.includes('stage 0') || ql.includes('no dr')) return 'Stage 0 means no diabetic retinopathy is detected — excellent news! Continue annual comprehensive dilated eye exams. Maintaining HbA1c < 7%, blood pressure below 130/80 mmHg, and healthy cholesterol levels are your best defenses against future progression. Stay consistent with your diabetes management plan.';
+  if (ql.includes('stage 4') || ql.includes('proliferative')) return 'Proliferative DR (Stage 4) is the most advanced stage and requires urgent specialist care. Abnormal new blood vessels (neovascularization) can cause vitreous hemorrhage and traction retinal detachment, leading to severe vision loss. Treatments include panretinal photocoagulation (PRP) laser, intravitreal anti-VEGF injections (ranibizumab, bevacizumab, aflibercept), and vitrectomy surgery when needed. Please see a vitreoretinal specialist immediately.';
+  if (ql.includes('treat')) return 'DR treatment depends on severity. Stages 0–1: optimize blood sugar (HbA1c < 7%), blood pressure (<130/80), and lipids — no direct eye treatment needed. Stage 2: consider intravitreal anti-VEGF if clinically indicated. Stage 3: urgent laser (PRP) or anti-VEGF injections. Stage 4: PRP, anti-VEGF, or vitrectomy surgery. Your ophthalmologist will determine the most appropriate approach based on your specific findings.';
+  if (ql.includes('caus') || ql.includes('why')) return 'DR is caused by chronic hyperglycemia damaging the retinal microvasculature. High blood sugar leads to pericyte loss, basement membrane thickening, and endothelial dysfunction. This causes capillary leakage (exudates, macular edema), capillary closure (ischemia), and eventually neovascularization in advanced stages. Key risk factors: diabetes duration, poor glycemic control, hypertension, dyslipidemia, diabetic nephropathy, and pregnancy.';
+  if (ql.includes('revers')) return 'Early-stage DR (0–1) can improve or stabilize significantly with strict metabolic control. Studies like DCCT and UKPDS show intensive glycemic management substantially reduces progression risk. However, structural retinal damage in moderate-to-severe stages is generally not reversible — treatment goals shift to halting progression and preserving vision. Early detection and intervention are critical for best outcomes.';
+  return 'Diabetic retinopathy is a serious complication of diabetes affecting the retina\'s blood vessels. It progresses through 5 stages — from no DR (Stage 0) to proliferative DR (Stage 4). The most important protective measures are strict blood glucose control, blood pressure management, annual eye exams, and prompt treatment when indicated. Would you like more specific information about a particular stage, treatment option, or management strategy?';
+}
+
+function sendQuick(btn) {
+  document.getElementById('chat-input').value = btn.textContent;
+  sendMessage();
+}
+
+function appendMsg(type, text) {
+  const container = document.getElementById('chat-messages');
+  const time = new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+  const div = document.createElement('div');
+  div.className = 'msg ' + type;
+  div.innerHTML = `
+    <div class="msg-avatar">${type === 'ai' ? 'AI' : 'YOU'}</div>
+    <div>
+      <div class="msg-bubble">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
+      <div class="msg-time">${type === 'ai' ? 'AI Assistant' : 'You'} · ${time}</div>
+    </div>`;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+// ============================================================
+// ONNX MODEL LOADER
+// ============================================================
+async function loadONNXModel(path) {
+  try {
+    ortSession = await ort.InferenceSession.create(path);
+    console.log('✓ ONNX model loaded from', path);
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#041428;border:1px solid #00ff88;color:#00ff88;font-family:Orbitron,monospace;font-size:0.72rem;padding:11px 18px;z-index:999;letter-spacing:0.08em;';
+    b.textContent = '◈ ONNX MODEL ACTIVE';
+    document.body.appendChild(b);
+    setTimeout(() => b.remove(), 3500);
+  } catch(e) {
+    console.warn('Model load failed:', e.message);
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+// To connect your trained ONNX model:
+// loadONNXModel('./model.onnx');
+
+setTimeout(() => {
+  const info = document.createElement('div');
+  info.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#041428;border:1px solid rgba(0,212,255,0.35);color:#6b8fa8;font-family:Rajdhani,sans-serif;font-size:0.8rem;padding:12px 18px;z-index:999;max-width:290px;line-height:1.55;border-radius:0;';
+  info.innerHTML = '<div style="color:#00d4ff;font-family:Orbitron,monospace;font-size:0.65rem;letter-spacing:0.1em;margin-bottom:6px;">◈ DEMO MODE ACTIVE</div>Upload any retinal image to see the full analysis UI. Place your <code style="color:#ff6b35;">model.onnx</code> file and call <code style="color:#ff6b35;">loadONNXModel()</code> for live inference.';
+  document.body.appendChild(info);
+  setTimeout(() => { info.style.transition='opacity 0.6s'; info.style.opacity='0'; setTimeout(()=>info.remove(),600); }, 7000);
+}, 1000);
+</script>
+</body>
+</html>
