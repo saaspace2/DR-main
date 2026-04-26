@@ -6,7 +6,6 @@
 <title>DR·XAI — Diabetic Retinopathy Platform</title>
 
 <script>
-  // Configuration
   const SUPABASE_URL  = "https://fcdkkbsmorjtjnuzgwdp.supabase.co";
   const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZjZGtrYnNtb3JqdGpudXpnd2RwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY2Njc0ODUsImV4cCI6MjA5MjI0MzQ4NX0.pW7Zf9mCgcGvnVOPKusXmFGhDSSmeb609cl7eUHhtII";
   const ADMIN_EMAIL    = "admin@drxai.com";
@@ -261,6 +260,9 @@ select.fi option{background:var(--sf2);}
 
 .pg-title{font-family:'Orbitron',monospace;font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;}
 
+/* Admin read-only results overlay */
+.admin-view-banner{background:rgba(176,106,255,.08);border:1px solid rgba(176,106,255,.35);color:var(--purple);font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:.15em;padding:9px 16px;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+
 @media(max-width:768px){
   .res-layout{grid-template-columns:1fr;}
   .stats-grid{grid-template-columns:repeat(2,1fr);}
@@ -326,6 +328,7 @@ select.fi option{background:var(--sf2);}
   </div>
 </div>
 
+<!-- AUTH PAGE -->
 <div id="pg-auth" class="pg active">
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:36px 20px;">
     <div class="auth-box">
@@ -358,6 +361,7 @@ select.fi option{background:var(--sf2);}
   </div>
 </div>
 
+<!-- ADMIN PAGE -->
 <div id="pg-admin" class="pg">
   <div class="wrap" style="padding-top:72px;padding-bottom:30px;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
@@ -405,6 +409,7 @@ select.fi option{background:var(--sf2);}
   </div>
 </div>
 
+<!-- DOCTOR PAGE -->
 <div id="pg-doctor" class="pg">
   <div class="wrap">
     <div class="pg-title">DOCTOR DASHBOARD</div>
@@ -426,16 +431,15 @@ select.fi option{background:var(--sf2);}
   </div>
 </div>
 
+<!-- UPLOAD PAGE -->
 <div id="pg-upload" class="pg">
   <div class="wrap" style="max-width:700px;">
     <div class="pg-title">RETINAL IMAGE ANALYSIS</div>
     <div style="color:var(--dim);font-size:.88rem;margin-bottom:22px;">Upload fundus photograph for AI-powered DR classification</div>
-
     <div style="margin-bottom:18px;">
       <label class="fl">Assign to Patient</label>
       <select class="fi" id="patient-sel"><option value="">— Select Patient —</option></select>
     </div>
-
     <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-in').click()">
       <div style="width:64px;height:64px;margin:0 auto 16px;">
         <svg viewBox="0 0 80 80" fill="none"><circle cx="40" cy="40" r="34" stroke="rgba(0,212,255,.38)" stroke-width="1.5" stroke-dasharray="6 4"/><path d="M40 52 L40 28M28 40 L40 28 L52 40" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="26" y="53" width="28" height="3" rx="1.5" fill="rgba(0,212,255,.28)"/></svg>
@@ -452,18 +456,24 @@ select.fi option{background:var(--sf2);}
   </div>
 </div>
 
+<!-- RESULTS PAGE -->
 <div id="pg-results" class="pg">
   <div class="wrap">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
       <div>
         <div class="pg-title">ANALYSIS RESULTS</div>
         <div style="color:var(--dim);font-size:.86rem;">Diabetic Retinopathy Classification · APTOS ResNet-50</div>
       </div>
-      <div style="display:flex;gap:9px;flex-wrap:wrap;">
-        <button class="btn btn-sm" onclick="sp('upload')">← NEW SCAN</button>
+      <div style="display:flex;gap:9px;flex-wrap:wrap;" id="results-actions">
+        <button class="btn btn-sm" onclick="resultsBack()">← BACK</button>
         <button class="btn btn-sm btn-o" onclick="sp('chat')">AI CONSULT →</button>
-        <button class="btn btn-sm btn-g" onclick="saveExam()">💾 SAVE</button>
+        <button class="btn btn-sm btn-g" id="save-btn" onclick="saveExam()">💾 SAVE</button>
       </div>
+    </div>
+
+    <!-- Admin read-only banner (shown only for admin) -->
+    <div class="admin-view-banner" id="admin-view-banner" style="display:none;">
+      ◈ ADMIN VIEW — Read-only. Editing disabled for administrator accounts.
     </div>
 
     <div class="res-layout">
@@ -506,12 +516,12 @@ select.fi option{background:var(--sf2);}
           <div class="stitle">CLINICAL RECOMMENDATIONS</div>
           <ul class="rec-ul" id="rec-ul"></ul>
         </div>
-        <div class="notes-sec">
+        <div class="notes-sec" id="notes-section">
           <div class="stitle">DOCTOR'S NOTES</div>
           <textarea class="notes-ta" id="exam-notes" placeholder="Clinical observations, follow-up instructions..."></textarea>
           <div class="stitle">PRESCRIBED MEDICATIONS</div>
           <div id="meds-list"></div>
-          <div class="med-row">
+          <div class="med-row" id="med-input-row">
             <input class="med-in" id="med-in" placeholder="Medication name / dosage..." onkeydown="if(event.key==='Enter')addMed()">
             <button class="btn-addmed" onclick="addMed()">+ ADD</button>
           </div>
@@ -521,6 +531,7 @@ select.fi option{background:var(--sf2);}
   </div>
 </div>
 
+<!-- PATIENT PAGE -->
 <div id="pg-patient" class="pg">
   <div class="wrap" style="max-width:920px;">
     <div class="pg-title">MY EXAMINATION RESULTS</div>
@@ -529,6 +540,7 @@ select.fi option{background:var(--sf2);}
   </div>
 </div>
 
+<!-- CHAT PAGE -->
 <div id="pg-chat" class="pg">
   <div class="wrap">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
@@ -586,6 +598,7 @@ let medications = [];
 let ortSession = null;
 let confirmCB = null;
 let regRole = 'doctor';
+let isAdminViewing = false; // tracks when admin is viewing a result read-only
 
 // ─── INIT SUPABASE ───────────────────────────────────────────
 function initSB() {
@@ -633,6 +646,13 @@ function navHome() {
   if (currentRole === 'admin') sp('admin');
   else if (currentRole === 'doctor') sp('doctor');
   else sp('patient');
+}
+
+// Back button on results page — context-aware
+function resultsBack() {
+  if (currentRole === 'admin') { sp('admin'); }
+  else if (currentRole === 'doctor') { sp('doctor'); }
+  else { sp('patient'); }
 }
 
 // ─── AUTH ────────────────────────────────────────────────────
@@ -725,6 +745,7 @@ async function doLogout() {
   if (SB) await SB.auth.signOut();
   try { localStorage.removeItem('drxai_session'); } catch(e) {}
   currentUser=null; currentRole=null; lastProbs=null; lastStage=null; currentImg=null; medications=[];
+  isAdminViewing = false;
   chatHistory.length = 0;
   document.getElementById('main-nav').style.display = 'none';
   document.getElementById('login-err').style.display = 'none';
@@ -744,12 +765,14 @@ function switchAdminTab(name, el) {
   if (name === 'users') loadUsersTable();
   if (name === 'exams') loadAdminExams();
 }
+
 function selRegRole(r) {
   regRole = r;
   document.getElementById('rb-doctor').className = 'rr-btn' + (r==='doctor'?' sel-d':'');
   document.getElementById('rb-patient').className = 'rr-btn' + (r==='patient'?' sel-p':'');
   document.getElementById('reg-speciality-row').style.display = r==='doctor' ? 'block' : 'none';
 }
+
 async function loadAdminDash() {
   document.getElementById('admin-greet').textContent = `Welcome, ${currentUser.name || 'Administrator'}`;
   if (!SB) { loadLocalAdminStats(); return; }
@@ -766,6 +789,7 @@ async function loadAdminDash() {
     document.getElementById('as-exams').textContent = ec||0;
   } catch(e) { loadLocalAdminStats(); }
 }
+
 function loadLocalAdminStats() {
   const users = JSON.parse(localStorage.getItem('drxai_users') || '[]');
   const exams = JSON.parse(localStorage.getItem('drxai_exams') || '[]');
@@ -774,6 +798,7 @@ function loadLocalAdminStats() {
   document.getElementById('as-pats').textContent  = users.filter(u=>u.role==='patient').length;
   document.getElementById('as-exams').textContent = exams.length;
 }
+
 async function doRegister() {
   const name=document.getElementById('reg-name').value.trim(), email=document.getElementById('reg-email').value.trim(),
         pwd=document.getElementById('reg-pwd').value, phone=document.getElementById('reg-phone').value.trim(),
@@ -799,7 +824,9 @@ async function doRegister() {
     clearRegForm(); loadAdminDash(); toast(`Account created: ${name}`, 't-ok');
   } catch(e) { err.textContent = e.message || 'Registration failed.'; err.style.display='block'; }
 }
+
 function clearRegForm() { ['reg-name','reg-email','reg-pwd','reg-phone','reg-spec'].forEach(id=>document.getElementById(id).value=''); }
+
 async function loadUsersTable() {
   const wrap = document.getElementById('users-table-wrap');
   let users = [];
@@ -814,6 +841,7 @@ async function loadUsersTable() {
   html += '</tbody></table></div>';
   wrap.innerHTML = html;
 }
+
 function deactivateUser(uid, name) {
   showConfirm('Remove User', `Remove ${name}? This cannot be undone.`, async () => {
     if (!SB) {
@@ -823,6 +851,7 @@ function deactivateUser(uid, name) {
     toast(`User removed: ${name}`, 't-ok'); loadUsersTable(); loadAdminDash();
   });
 }
+
 async function loadAdminExams() {
   const wrap = document.getElementById('admin-exams-wrap');
   let exams=[], users=[];
@@ -838,13 +867,80 @@ async function loadAdminExams() {
   }
   if (!exams.length) { wrap.innerHTML='<div class="empty">No examinations yet.</div>'; return; }
   const umap = {}; users.forEach(u => umap[u.id] = u.name);
-  let html = `<div style="overflow-x:auto;"><table class="dt"><thead><tr><th>Patient</th><th>Doctor</th><th>Stage</th><th>Confidence</th><th>Date</th><th>Notes</th></tr></thead><tbody>`;
+  let html = `<div style="overflow-x:auto;"><table class="dt"><thead><tr><th>Patient</th><th>Doctor</th><th>Stage</th><th>Confidence</th><th>Date</th><th>Notes</th><th>View</th></tr></thead><tbody>`;
   exams.forEach(e => {
     const date = new Date(e.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
-    html += `<tr><td style="font-weight:600;">${umap[e.patient_id]||'Unassigned'}</td><td style="color:var(--dim);">${umap[e.doctor_id]||'—'}</td><td><span class="sb s${e.stage}">STAGE ${e.stage}</span></td><td style="font-family:'Orbitron',monospace;font-size:.8rem;color:${SCOLS[e.stage]};">${e.confidence||'—'}%</td><td style="font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--dim);">${date}</td><td style="color:var(--dim);font-size:.82rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.notes||'—'}</td></tr>`;
+    html += `<tr>
+      <td style="font-weight:600;">${umap[e.patient_id]||'Unassigned'}</td>
+      <td style="color:var(--dim);">${umap[e.doctor_id]||'—'}</td>
+      <td><span class="sb s${e.stage}">STAGE ${e.stage}</span></td>
+      <td style="font-family:'Orbitron',monospace;font-size:.8rem;color:${SCOLS[e.stage]};">${e.confidence||'—'}%</td>
+      <td style="font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--dim);">${date}</td>
+      <td style="color:var(--dim);font-size:.82rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.notes||'—'}</td>
+      <td><button class="btn btn-sm" onclick="adminViewExam('${e.id}')">VIEW</button></td>
+    </tr>`;
   });
   html += '</tbody></table></div>';
   wrap.innerHTML = html;
+}
+
+// ── ADMIN: view any exam result (read-only) ──────────────────
+async function adminViewExam(examId) {
+  let exams = [];
+  if (!SB) {
+    exams = JSON.parse(localStorage.getItem('drxai_exams') || '[]');
+  } else {
+    const { data } = await SB.from('examinations').select('*').eq('id', examId);
+    exams = data || [];
+  }
+  const e = exams.find(x => x.id === examId);
+  if (!e) { toast('Examination record not found.', 't-err'); return; }
+
+  const probs = JSON.parse(e.probs || '[0.2,0.2,0.2,0.2,0.2]');
+  lastProbs  = probs;
+  lastStage  = e.stage;
+  currentImg = e.image_data || null;
+  medications = JSON.parse(e.medications || '[]');
+
+  // Mark as admin read-only view
+  isAdminViewing = true;
+
+  // Show/hide result controls
+  document.getElementById('save-btn').style.display = 'none';
+  document.getElementById('admin-view-banner').style.display = 'flex';
+
+  // Lock notes & medication input
+  const notesTA = document.getElementById('exam-notes');
+  notesTA.value = e.notes || '';
+  notesTA.disabled = true;
+  notesTA.style.opacity = '0.5';
+  document.getElementById('med-input-row').style.display = 'none';
+
+  renderMeds(true); // read-only meds
+
+  if (currentImg) {
+    document.getElementById('res-img').src = currentImg;
+    document.getElementById('img-panel').style.display = 'block';
+    document.getElementById('xai-img').src = currentImg;
+    document.getElementById('xai-panel').style.display = 'block';
+  } else {
+    document.getElementById('img-panel').style.display = 'none';
+    document.getElementById('xai-panel').style.display = 'none';
+  }
+
+  displayResults(probs);
+  sp('results');
+}
+
+// Reset results page to editable state (for doctor)
+function resetResultsForDoctor() {
+  isAdminViewing = false;
+  document.getElementById('save-btn').style.display = '';
+  document.getElementById('admin-view-banner').style.display = 'none';
+  const notesTA = document.getElementById('exam-notes');
+  notesTA.disabled = false;
+  notesTA.style.opacity = '';
+  document.getElementById('med-input-row').style.display = '';
 }
 
 // ─── DOCTOR ──────────────────────────────────────────────────
@@ -874,6 +970,7 @@ async function loadDoctorDash() {
   html += '</tbody></table></div>';
   wrap.innerHTML = html;
 }
+
 async function loadPatientSelect() {
   const sel = document.getElementById('patient-sel');
   sel.innerHTML = '<option value="">— Select Patient —</option>';
@@ -882,6 +979,7 @@ async function loadPatientSelect() {
   else { const {data}=await SB.from('profiles').select('id,name').eq('role','patient').eq('is_active',true); patients=data||[]; }
   patients.forEach(p => { const o=document.createElement('option'); o.value=p.id; o.textContent=p.name; sel.appendChild(o); });
 }
+
 async function loadExamIntoResults(examId) {
   let exams = [];
   if (!SB) { exams=JSON.parse(localStorage.getItem('drxai_exams')||'[]'); }
@@ -891,12 +989,18 @@ async function loadExamIntoResults(examId) {
   lastProbs=probs; lastStage=e.stage; currentImg=e.image_data||null;
   medications=JSON.parse(e.medications||'[]');
   document.getElementById('exam-notes').value=e.notes||'';
+
+  resetResultsForDoctor();
   renderMeds();
+
   if (currentImg) {
     document.getElementById('res-img').src=currentImg;
     document.getElementById('img-panel').style.display='block';
     document.getElementById('xai-img').src=currentImg;
     document.getElementById('xai-panel').style.display='block';
+  } else {
+    document.getElementById('img-panel').style.display='none';
+    document.getElementById('xai-panel').style.display='none';
   }
   displayResults(probs);
   sp('results');
@@ -941,13 +1045,13 @@ function processFile(file) {
   r.readAsDataURL(file);
 }
 
-// ─── UPDATED ANALYSIS RUNNER ────────────────
+// ─── ANALYSIS RUNNER ─────────────────────────────────────────
 async function runAnalysis() {
   if (!currentImg) return;
   document.getElementById('scan-ov').classList.add('show');
   document.getElementById('scan-sub-txt').textContent = 'Initializing ONNX Inference Engine...';
-  
-  medications = []; 
+
+  medications = [];
   document.getElementById('exam-notes').value = '';
 
   let probs = null;
@@ -955,8 +1059,8 @@ async function runAnalysis() {
   if (ortSession) {
     try {
       probs = await runONNX(currentImg);
-    } catch(e) { 
-      console.warn('ONNX Inference failed, falling back to deterministic hash:', e.message); 
+    } catch(e) {
+      console.warn('ONNX Inference failed, falling back to deterministic hash:', e.message);
     }
   }
 
@@ -972,37 +1076,37 @@ async function runAnalysis() {
 
   document.getElementById('scan-ov').classList.remove('show');
 
+  // Reset to doctor-editable mode for a fresh scan
+  resetResultsForDoctor();
+
   if (currentImg) {
     document.getElementById('res-img').src = currentImg;
     document.getElementById('img-panel').style.display = 'block';
     document.getElementById('xai-img').src = currentImg;
     document.getElementById('xai-panel').style.display = 'block';
   }
-  
+
   renderMeds();
   displayResults(probs);
   sp('results');
 }
 
-// ─── IMAGE-HASH DIAGNOSIS ──────
+// ─── IMAGE-HASH DIAGNOSIS ─────────────────────────────────────
 function generateImageHashProbs(dataUrl) {
   let h = 0;
   for (let i = 0; i < Math.min(dataUrl.length, 600); i++) {
     h = Math.imul(31, h) + dataUrl.charCodeAt(i) | 0;
   }
   h = Math.abs(h);
-
   const dominantStage = h % 5;
   const p = [0.025, 0.025, 0.025, 0.025, 0.025];
-  
   p[dominantStage] = 0.50 + (h % 120) / 280;
   const secondaryStage = (dominantStage + 1 + h % 3) % 5;
   p[secondaryStage] = 0.15 + (h % 60) / 500;
-
   return p;
 }
 
-// ─── ONNX IMAGE PREPROCESSING ─────
+// ─── ONNX ─────────────────────────────────────────────────────
 async function runONNX(url) {
   if (!ortSession) throw new Error('no session');
   const t = await imageToTensor(url);
@@ -1024,15 +1128,13 @@ async function imageToTensor(url) {
       const ctx = c.getContext('2d');
       ctx.drawImage(img, 0, 0, 224, 224);
       const d = ctx.getImageData(0, 0, 224, 224).data;
-      
       const mean = [0.485, 0.456, 0.406];
-      const std = [0.229, 0.224, 0.225];
-      
+      const std  = [0.229, 0.224, 0.225];
       const f = new Float32Array(3 * 224 * 224);
       for (let i = 0; i < 224 * 224; i++) {
-        f[i] = (d[i * 4] / 255 - mean[0]) / std[0]; // R
-        f[i + 224 * 224] = (d[i * 4 + 1] / 255 - mean[1]) / std[1]; // G
-        f[i + 2 * 224 * 224] = (d[i * 4 + 2] / 255 - mean[2]) / std[2]; // B
+        f[i]               = (d[i*4]   / 255 - mean[0]) / std[0];
+        f[i + 224*224]     = (d[i*4+1] / 255 - mean[1]) / std[1];
+        f[i + 2*224*224]   = (d[i*4+2] / 255 - mean[2]) / std[2];
       }
       res(new ort.Tensor('float32', f, [1, 3, 224, 224]));
     };
@@ -1045,8 +1147,6 @@ async function loadONNXModel(path) {
   try { ortSession=await ort.InferenceSession.create(path); toast('ONNX model loaded: '+path,'t-ok'); }
   catch(e) { console.warn('ONNX load failed:',e.message); }
 }
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ─── DISPLAY RESULTS ─────────────────────────────────────────
 function displayResults(probs) {
@@ -1111,27 +1211,32 @@ function drawGauge(si, probs) {
 
 // ─── MEDICATIONS ─────────────────────────────────────────────
 function addMed() {
+  if (isAdminViewing) return;
   const v=document.getElementById('med-in').value.trim(); if(!v) return;
   medications.push(v); document.getElementById('med-in').value=''; renderMeds();
 }
-function removeMed(i) { medications.splice(i,1); renderMeds(); }
-function renderMeds() {
+function removeMed(i) {
+  if (isAdminViewing) return;
+  medications.splice(i,1); renderMeds();
+}
+function renderMeds(readOnly) {
   const el=document.getElementById('meds-list'); el.innerHTML='';
   medications.forEach((m,i) => {
     const d=document.createElement('div'); d.className='med-item';
-    d.innerHTML=`<span style="font-size:.86rem;">${m}</span><button class="med-rm" onclick="removeMed(${i})">✕ Remove</button>`;
+    d.innerHTML=`<span style="font-size:.86rem;">${m}</span>${readOnly?'':`<button class="med-rm" onclick="removeMed(${i})">✕ Remove</button>`}`;
     el.appendChild(d);
   });
 }
 
 // ─── SAVE EXAM ───────────────────────────────────────────────
 async function saveExam() {
+  if (isAdminViewing) { toast('Admin view is read-only.', 't-err'); return; }
   if (!lastProbs || !currentUser) { toast('No results to save.', 't-err'); return; }
   const mi = lastProbs.indexOf(Math.max(...lastProbs));
   const pid = document.getElementById('patient-sel')?.value || null;
   const notes = document.getElementById('exam-notes').value.trim();
   const exam = {
-    id: 'ex_'+Date.now(),
+    id:          'ex_'+Date.now(),
     doctor_id:   currentUser.id,
     patient_id:  pid || null,
     stage:       mi,
@@ -1139,7 +1244,7 @@ async function saveExam() {
     probs:       JSON.stringify(lastProbs),
     notes:       notes || null,
     medications: JSON.stringify(medications),
-    image_data:  currentImg ? currentImg.substring(0,3000) : null,
+    image_data:  currentImg || null,   // ← full base64, no truncation
     created_at:  new Date().toISOString()
   };
   if (!SB) {
@@ -1155,15 +1260,12 @@ async function saveExam() {
   } catch(e) { toast('Save failed: '+e.message, 't-err'); }
 }
 
-// ─── AI CHATBOT (OPENROUTER FREE MODELS) ───────────────────────────
-// ⚠️ WARNING: Exposing API keys in frontend code is not recommended for production environments. 
-// If you host this publicly (e.g., GitHub Pages), be sure to restrict your OpenRouter API key 
-// to your specific domain URL in your OpenRouter settings to prevent unauthorized usage.
-const OPENROUTER_API_KEY = "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"; 
+// ─── AI CHATBOT ───────────────────────────────────────────────
+// ⚠️ WARNING: Exposing API keys in frontend code is not recommended for production.
+// Restrict your OpenRouter API key to your domain in OpenRouter settings.
+const OPENROUTER_API_KEY = "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";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-
-// 🔴 THE ULTIMATE FIX: This automatically routes to whichever free model is currently online and not busy!
-const CHAT_MODEL = "openrouter/free"; 
+const CHAT_MODEL = "openrouter/free";
 const chatHistory = [];
 
 function qsend(btn) { document.getElementById('chat-in').value = btn.textContent; sendChat(); }
@@ -1192,14 +1294,10 @@ async function sendChat() {
       headers: {
         'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.href, 
+        'HTTP-Referer': window.location.href,
         'X-Title': 'DR-XAI Platform'
       },
-      body: JSON.stringify({
-        model: CHAT_MODEL,
-        messages: messages,
-        temperature: 0.3
-      })
+      body: JSON.stringify({ model: CHAT_MODEL, messages, temperature: 0.3 })
     });
 
     if (!res.ok) {
@@ -1209,16 +1307,14 @@ async function sendChat() {
 
     const data = await res.json();
     const reply = data.choices[0].message.content || 'Unable to process request.';
-    
     chatHistory.push({ role: 'assistant', content: reply });
     ti.classList.remove('show');
     appendChat('ai', reply);
-    
+
   } catch(err) {
     console.warn('OpenRouter API error:', err.message);
     ti.classList.remove('show');
     alert("Live AI Connection Failed!\nReason: " + err.message + "\n\nSwitching to offline fallback mode.");
-    
     const fb = fallbackReply(text);
     chatHistory.push({ role: 'assistant', content: fb });
     appendChat('ai', fb);
@@ -1230,11 +1326,9 @@ function buildSysPrompt() {
   if (lastProbs && lastStage !== null) {
     diagCtx = `\n\nCurrent diagnosis in context: Stage ${lastStage} (${SNAMES[lastStage]}), confidence ${Math.round(lastProbs[lastStage]*100)}%. Full probability distribution: ${lastProbs.map((p,i)=>`Stage ${i}: ${Math.round(p*100)}%`).join(', ')}.`;
   }
-
   const roleCtx = (currentRole === 'doctor' || currentRole === 'admin')
     ? 'You are speaking with a medical professional. Use clinical terminology, cite evidence-based guidelines (ETDRS, UKPDS, ACCORD-Eye), and provide detailed pathophysiological context.'
     : 'You are speaking with a patient. Use clear, compassionate, accessible language. Explain medical terms simply and address concerns about vision and health.';
-
   return `You are an expert AI medical consultant specializing in diabetic retinopathy within the DR-XAI diagnostic platform.\n\n${roleCtx}${diagCtx}\n\nGuidelines:\n- Provide accurate evidence-based information.\n- Keep responses between 150-280 words.\n- Format clearly when listing treatments or recommendations.\n- Never serve as a sole clinical diagnostic tool.`;
 }
 
