@@ -198,6 +198,17 @@ select.fi option{background:var(--sf2);}
 .med-pill{display:inline-block;padding:3px 11px;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.24);color:var(--accent);font-size:.76rem;margin:3px 3px 3px 0;}
 .doc-note{background:rgba(0,212,255,.04);border-left:3px solid var(--accent);padding:11px 15px;font-size:.86rem;line-height:1.7;color:var(--dim);font-style:italic;margin-top:11px;}
 
+/* ── ADMIN EXAMS TABLE ── */
+.admin-exams-tbl-wrap{overflow-x:auto;}
+.admin-exams-tbl-wrap .dt td img.thumb{
+  width:44px;height:44px;object-fit:cover;border:1px solid var(--border);border-radius:2px;display:block;
+}
+.no-img-thumb{width:44px;height:44px;background:var(--sf2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.5rem;color:var(--dim);font-family:'Share Tech Mono',monospace;text-align:center;line-height:1.3;}
+.exam-row-meta{font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--dim);}
+.notes-preview{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim);font-size:.8rem;font-style:italic;}
+.prob-mini{display:flex;gap:2px;margin-top:4px;}
+.prob-mini-bar{height:3px;border-radius:1px;}
+
 #pg-chat{min-height:100vh;}
 .chat-layout{max-width:860px;margin:0 auto;display:flex;flex-direction:column;}
 .chat-msg-box{flex:1;min-height:400px;max-height:450px;overflow-y:auto;border:1px solid var(--border);background:var(--surface);padding:20px;margin-bottom:12px;scroll-behavior:smooth;}
@@ -259,8 +270,6 @@ select.fi option{background:var(--sf2);}
 .toast.t-info{border-color:rgba(0,212,255,.4);color:var(--accent);}
 
 .pg-title{font-family:'Orbitron',monospace;font-size:1.1rem;font-weight:700;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;}
-
-/* Admin read-only results overlay */
 .admin-view-banner{background:rgba(176,106,255,.08);border:1px solid rgba(176,106,255,.35);color:var(--purple);font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:.15em;padding:9px 16px;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
 
 @media(max-width:768px){
@@ -404,7 +413,10 @@ select.fi option{background:var(--sf2);}
       <div class="card"><div class="stitle">ALL REGISTERED USERS</div><div id="users-table-wrap"><div class="empty">Loading...</div></div></div>
     </div>
     <div class="apanel" id="ap-exams">
-      <div class="card"><div class="stitle">ALL EXAMINATIONS</div><div id="admin-exams-wrap"><div class="empty">Loading...</div></div></div>
+      <div class="card">
+        <div class="stitle">ALL EXAMINATIONS</div>
+        <div id="admin-exams-wrap"><div class="empty">Loading...</div></div>
+      </div>
     </div>
   </div>
 </div>
@@ -470,12 +482,9 @@ select.fi option{background:var(--sf2);}
         <button class="btn btn-sm btn-g" id="save-btn" onclick="saveExam()">💾 SAVE</button>
       </div>
     </div>
-
-    <!-- Admin read-only banner (shown only for admin) -->
     <div class="admin-view-banner" id="admin-view-banner" style="display:none;">
       ◈ ADMIN VIEW — Read-only. Editing disabled for administrator accounts.
     </div>
-
     <div class="res-layout">
       <div>
         <div class="diag-card">
@@ -579,7 +588,6 @@ select.fi option{background:var(--sf2);}
 <script>
 'use strict';
 
-// ─── CONSTANTS ───────────────────────────────────────────────
 const SNAMES = ['No Diabetic Retinopathy','Mild Non-Proliferative DR','Moderate Non-Proliferative DR','Severe Non-Proliferative DR','Proliferative Diabetic Retinopathy'];
 const SCOLS  = ['#00ff88','#00d4ff','#ffcc00','#ff6b35','#ff2d55'];
 const RECS   = [
@@ -590,7 +598,6 @@ const RECS   = [
   ['EMERGENCY: Immediate vitreoretinal surgeon referral','Vitrectomy may be required for vitreous hemorrhage','Urgent panretinal photocoagulation (PRP) laser','High risk of severe vision loss — act immediately','Intensive multidisciplinary diabetes management']
 ];
 
-// ─── STATE ───────────────────────────────────────────────────
 let SB = null;
 let currentUser = null, currentRole = null, currentImg = null;
 let lastProbs = null, lastStage = null;
@@ -598,9 +605,9 @@ let medications = [];
 let ortSession = null;
 let confirmCB = null;
 let regRole = 'doctor';
-let isAdminViewing = false; // tracks when admin is viewing a result read-only
+let isAdminViewing = false;
 
-// ─── INIT SUPABASE ───────────────────────────────────────────
+// ─── SUPABASE INIT ────────────────────────────────────────────
 function initSB() {
   const url = (typeof SUPABASE_URL !== 'undefined') ? SUPABASE_URL : '';
   const key = (typeof SUPABASE_ANON_KEY !== 'undefined') ? SUPABASE_ANON_KEY : '';
@@ -609,7 +616,7 @@ function initSB() {
   return true;
 }
 
-// ─── TOAST ───────────────────────────────────────────────────
+// ─── TOAST ────────────────────────────────────────────────────
 function toast(msg, type='t-info') {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'toast ' + type + ' show';
@@ -626,7 +633,7 @@ function showConfirm(title, msg, cb) {
 function closeConfirm() { document.getElementById('confirm-modal').classList.remove('show'); confirmCB = null; }
 function confirmAction() { closeConfirm(); if (confirmCB) confirmCB(); }
 
-// ─── PAGE NAV ────────────────────────────────────────────────
+// ─── PAGE NAV ─────────────────────────────────────────────────
 function sp(name) {
   document.querySelectorAll('.pg').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
@@ -648,14 +655,13 @@ function navHome() {
   else sp('patient');
 }
 
-// Back button on results page — context-aware
 function resultsBack() {
   if (currentRole === 'admin') { sp('admin'); }
   else if (currentRole === 'doctor') { sp('doctor'); }
   else { sp('patient'); }
 }
 
-// ─── AUTH ────────────────────────────────────────────────────
+// ─── AUTH ─────────────────────────────────────────────────────
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pwd   = document.getElementById('login-pwd').value;
@@ -677,7 +683,7 @@ async function doLogin() {
           const su = await SB.auth.signUp({ email, password: pwd });
           if (su.error && !su.error.message.toLowerCase().includes('already')) throw su.error;
           const si2 = await SB.auth.signInWithPassword({ email, password: pwd });
-          if (si2.error) { showErr(err, 'Email confirmation required. Disable it in Supabase → Authentication → Configuration.'); btn.disabled=false; btn.textContent='SIGN IN'; return; }
+          if (si2.error) { showErr(err, 'Email confirmation required.'); btn.disabled=false; btn.textContent='SIGN IN'; return; }
           data = si2.data;
         }
         if (!data?.user) throw new Error('No user returned.');
@@ -756,7 +762,7 @@ async function doLogout() {
   sp('auth');
 }
 
-// ─── ADMIN ───────────────────────────────────────────────────
+// ─── ADMIN ────────────────────────────────────────────────────
 function switchAdminTab(name, el) {
   document.querySelectorAll('.atab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.apanel').forEach(p => p.classList.remove('active'));
@@ -852,71 +858,178 @@ function deactivateUser(uid, name) {
   });
 }
 
+// ─── ADMIN: ALL EXAMINATIONS (FIXED) ─────────────────────────
 async function loadAdminExams() {
   const wrap = document.getElementById('admin-exams-wrap');
-  let exams=[], users=[];
-  if (!SB) {
-    exams = JSON.parse(localStorage.getItem('drxai_exams') || '[]');
-    users = JSON.parse(localStorage.getItem('drxai_users') || '[]');
-  } else {
-    const [ed,ud] = await Promise.all([
-      SB.from('examinations').select('*').order('created_at',{ascending:false}),
-      SB.from('profiles').select('id,name,role')
-    ]);
-    exams=ed.data||[]; users=ud.data||[];
+  wrap.innerHTML = '<div class="empty">Loading examinations...</div>';
+
+  let exams = [], users = [];
+
+  try {
+    if (!SB) {
+      // Local storage mode
+      exams = JSON.parse(localStorage.getItem('drxai_exams') || '[]');
+      users = JSON.parse(localStorage.getItem('drxai_users') || '[]');
+      // Also include the admin user itself for name resolution
+      users.push({ id: 'admin-local', name: 'Administrator', role: 'admin' });
+    } else {
+      // Supabase mode — fetch both tables in parallel
+      const [examRes, userRes] = await Promise.all([
+        SB.from('examinations').select('*').order('created_at', { ascending: false }),
+        SB.from('profiles').select('id,name,role')
+      ]);
+      if (examRes.error) throw examRes.error;
+      exams = examRes.data || [];
+      users = userRes.data || [];
+    }
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty" style="color:var(--danger);">Failed to load examinations: ${e.message}</div>`;
+    return;
   }
-  if (!exams.length) { wrap.innerHTML='<div class="empty">No examinations yet.</div>'; return; }
-  const umap = {}; users.forEach(u => umap[u.id] = u.name);
-  let html = `<div style="overflow-x:auto;"><table class="dt"><thead><tr><th>Patient</th><th>Doctor</th><th>Stage</th><th>Confidence</th><th>Date</th><th>Notes</th><th>View</th></tr></thead><tbody>`;
+
+  if (!exams.length) {
+    wrap.innerHTML = `
+      <div class="empty" style="border:1px solid var(--border);padding:48px 24px;">
+        <div style="font-size:2rem;margin-bottom:12px;opacity:.3;">🔬</div>
+        <div style="font-family:'Orbitron',monospace;font-size:.7rem;letter-spacing:.2em;color:var(--dim);margin-bottom:8px;">NO EXAMINATIONS YET</div>
+        <div style="font-size:.84rem;color:var(--dim);line-height:1.7;">Examinations will appear here once doctors run retinal scans.<br>Register a doctor account and upload a fundus image to begin.</div>
+      </div>`;
+    return;
+  }
+
+  // Build name lookup map
+  const umap = {};
+  users.forEach(u => { umap[u.id] = { name: u.name || u.email || '—', role: u.role }; });
+
+  // Summary stats bar
+  const critCount = exams.filter(e => e.stage >= 3).length;
+  const avgConf   = exams.length ? Math.round(exams.reduce((a,e) => a + (e.confidence||0), 0) / exams.length) : 0;
+  const stageCounts = [0,1,2,3,4].map(s => exams.filter(e => e.stage === s).length);
+
+  let html = `
+    <!-- Summary strip -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;">
+      ${[0,1,2,3,4].map(s => `
+        <div style="border:1px solid ${SCOLS[s]}33;background:${SCOLS[s]}09;padding:10px;text-align:center;">
+          <div style="font-family:'Orbitron',monospace;font-size:1.3rem;font-weight:900;color:${SCOLS[s]};">${stageCounts[s]}</div>
+          <div style="font-size:.6rem;color:var(--dim);letter-spacing:.1em;margin-top:2px;">STAGE ${s}</div>
+        </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:18px;margin-bottom:16px;font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--dim);align-items:center;">
+      <span>Total: <span style="color:var(--accent);font-weight:700;">${exams.length}</span></span>
+      <span>Critical (S3–4): <span style="color:var(--danger);font-weight:700;">${critCount}</span></span>
+      <span>Avg Confidence: <span style="color:var(--warn);font-weight:700;">${avgConf}%</span></span>
+    </div>
+
+    <!-- Table -->
+    <div class="admin-exams-tbl-wrap">
+    <table class="dt">
+      <thead>
+        <tr>
+          <th>Fundus</th>
+          <th>Patient</th>
+          <th>Doctor</th>
+          <th>Stage / Diagnosis</th>
+          <th>Confidence</th>
+          <th>Probability Distribution</th>
+          <th>Medications</th>
+          <th>Notes</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>`;
+
   exams.forEach(e => {
-    const date = new Date(e.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
-    html += `<tr>
-      <td style="font-weight:600;">${umap[e.patient_id]||'Unassigned'}</td>
-      <td style="color:var(--dim);">${umap[e.doctor_id]||'—'}</td>
-      <td><span class="sb s${e.stage}">STAGE ${e.stage}</span></td>
-      <td style="font-family:'Orbitron',monospace;font-size:.8rem;color:${SCOLS[e.stage]};">${e.confidence||'—'}%</td>
-      <td style="font-family:'Share Tech Mono',monospace;font-size:.75rem;color:var(--dim);">${date}</td>
-      <td style="color:var(--dim);font-size:.82rem;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.notes||'—'}</td>
-      <td><button class="btn btn-sm" onclick="adminViewExam('${e.id}')">VIEW</button></td>
-    </tr>`;
+    const date  = new Date(e.created_at).toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+    const time  = new Date(e.created_at).toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit' });
+    const pname = umap[e.patient_id]?.name || '<span style="color:var(--dim);font-style:italic;">Unassigned</span>';
+    const dname = umap[e.doctor_id]?.name  || '—';
+    const stage = (e.stage !== undefined && e.stage !== null) ? Number(e.stage) : 0;
+    const col   = SCOLS[stage] || '#888';
+    const sname = SNAMES[stage] || '—';
+    const conf  = e.confidence || 0;
+    const meds  = (() => { try { return JSON.parse(e.medications || '[]'); } catch { return []; } })();
+    const probs = (() => { try { return JSON.parse(e.probs || '[]'); } catch { return []; } })();
+
+    // Mini probability bars
+    const probBars = probs.length ? `
+      <div class="prob-mini">
+        ${probs.map((p,i) => `<div class="prob-mini-bar" style="width:${Math.round(p*100)*1.2}px;max-width:44px;background:${SCOLS[i]};opacity:${i===stage?1:.45};" title="Stage ${i}: ${Math.round(p*100)}%"></div>`).join('')}
+      </div>
+      <div style="font-size:.65rem;color:var(--dim);margin-top:3px;">${probs.map((p,i)=>`S${i}:${Math.round(p*100)}%`).join(' ')}</div>
+    ` : '<span style="color:var(--dim);font-size:.72rem;">—</span>';
+
+    // Thumbnail
+    const thumb = e.image_data
+      ? `<img src="${e.image_data}" class="thumb" title="Fundus image">`
+      : `<div class="no-img-thumb">NO<br>IMG</div>`;
+
+    // Meds display
+    const medsHtml = meds.length
+      ? meds.map(m => `<span class="med-pill" style="font-size:.62rem;padding:2px 7px;">${m}</span>`).join('')
+      : '<span style="color:var(--dim);font-size:.78rem;">—</span>';
+
+    html += `
+      <tr>
+        <td>${thumb}</td>
+        <td style="font-weight:600;white-space:nowrap;">${pname}</td>
+        <td class="exam-row-meta" style="white-space:nowrap;">${dname}</td>
+        <td>
+          <span class="sb s${stage}" style="margin-bottom:4px;display:inline-block;">STAGE ${stage}</span>
+          <div style="font-size:.76rem;color:${col};margin-top:3px;font-weight:600;">${sname}</div>
+        </td>
+        <td>
+          <div style="font-family:'Orbitron',monospace;font-size:1.1rem;font-weight:900;color:${col};">${conf}%</div>
+        </td>
+        <td style="min-width:160px;">${probBars}</td>
+        <td style="max-width:140px;">${medsHtml}</td>
+        <td><div class="notes-preview" title="${(e.notes||'').replace(/"/g,"'")}">
+          ${e.notes ? `"${e.notes}"` : '<span style="color:var(--dim);font-style:italic;">—</span>'}
+        </div></td>
+        <td class="exam-row-meta" style="white-space:nowrap;">${date}<br>${time}</td>
+        <td><button class="btn btn-sm" onclick="adminViewExam('${e.id}')">VIEW</button></td>
+      </tr>`;
   });
+
   html += '</tbody></table></div>';
   wrap.innerHTML = html;
 }
 
-// ── ADMIN: view any exam result (read-only) ──────────────────
+// ─── ADMIN VIEW EXAM (read-only) ──────────────────────────────
 async function adminViewExam(examId) {
   let exams = [];
-  if (!SB) {
-    exams = JSON.parse(localStorage.getItem('drxai_exams') || '[]');
-  } else {
-    const { data } = await SB.from('examinations').select('*').eq('id', examId);
-    exams = data || [];
-  }
+  try {
+    if (!SB) {
+      exams = JSON.parse(localStorage.getItem('drxai_exams') || '[]');
+    } else {
+      const { data, error } = await SB.from('examinations').select('*').eq('id', examId);
+      if (error) throw error;
+      exams = data || [];
+    }
+  } catch(e) { toast('Error loading exam: ' + e.message, 't-err'); return; }
+
   const e = exams.find(x => x.id === examId);
   if (!e) { toast('Examination record not found.', 't-err'); return; }
 
-  const probs = JSON.parse(e.probs || '[0.2,0.2,0.2,0.2,0.2]');
-  lastProbs  = probs;
-  lastStage  = e.stage;
-  currentImg = e.image_data || null;
-  medications = JSON.parse(e.medications || '[]');
+  const probs = (() => { try { return JSON.parse(e.probs || '[0.2,0.2,0.2,0.2,0.2]'); } catch { return [0.2,0.2,0.2,0.2,0.2]; } })();
+  lastProbs   = probs;
+  lastStage   = e.stage;
+  currentImg  = e.image_data || null;
+  medications = (() => { try { return JSON.parse(e.medications || '[]'); } catch { return []; } })();
 
-  // Mark as admin read-only view
   isAdminViewing = true;
 
-  // Show/hide result controls
   document.getElementById('save-btn').style.display = 'none';
   document.getElementById('admin-view-banner').style.display = 'flex';
 
-  // Lock notes & medication input
   const notesTA = document.getElementById('exam-notes');
   notesTA.value = e.notes || '';
   notesTA.disabled = true;
   notesTA.style.opacity = '0.5';
   document.getElementById('med-input-row').style.display = 'none';
 
-  renderMeds(true); // read-only meds
+  renderMeds(true);
 
   if (currentImg) {
     document.getElementById('res-img').src = currentImg;
@@ -932,7 +1045,6 @@ async function adminViewExam(examId) {
   sp('results');
 }
 
-// Reset results page to editable state (for doctor)
 function resetResultsForDoctor() {
   isAdminViewing = false;
   document.getElementById('save-btn').style.display = '';
@@ -943,7 +1055,7 @@ function resetResultsForDoctor() {
   document.getElementById('med-input-row').style.display = '';
 }
 
-// ─── DOCTOR ──────────────────────────────────────────────────
+// ─── DOCTOR ───────────────────────────────────────────────────
 async function loadDoctorDash() {
   document.getElementById('doctor-greet').textContent = `Welcome, ${currentUser.name || 'Doctor'}`;
   let exams = [];
@@ -985,14 +1097,12 @@ async function loadExamIntoResults(examId) {
   if (!SB) { exams=JSON.parse(localStorage.getItem('drxai_exams')||'[]'); }
   else { const {data}=await SB.from('examinations').select('*').eq('id',examId); exams=data||[]; }
   const e = exams.find(x=>x.id===examId); if (!e) return;
-  const probs = JSON.parse(e.probs||'[0.2,0.2,0.2,0.2,0.2]');
+  const probs = (() => { try { return JSON.parse(e.probs||'[0.2,0.2,0.2,0.2,0.2]'); } catch { return [0.2,0.2,0.2,0.2,0.2]; } })();
   lastProbs=probs; lastStage=e.stage; currentImg=e.image_data||null;
-  medications=JSON.parse(e.medications||'[]');
+  medications = (() => { try { return JSON.parse(e.medications||'[]'); } catch { return []; } })();
   document.getElementById('exam-notes').value=e.notes||'';
-
   resetResultsForDoctor();
   renderMeds();
-
   if (currentImg) {
     document.getElementById('res-img').src=currentImg;
     document.getElementById('img-panel').style.display='block';
@@ -1006,7 +1116,7 @@ async function loadExamIntoResults(examId) {
   sp('results');
 }
 
-// ─── PATIENT ─────────────────────────────────────────────────
+// ─── PATIENT ──────────────────────────────────────────────────
 async function loadPatientExams() {
   let exams = [];
   if (!SB) { exams=(JSON.parse(localStorage.getItem('drxai_exams')||'[]')).filter(e=>e.patient_id===currentUser.id); }
@@ -1016,14 +1126,14 @@ async function loadPatientExams() {
   wrap.innerHTML='';
   exams.forEach(e => {
     const date=new Date(e.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
-    const meds=JSON.parse(e.medications||'[]');
+    const meds=(() => { try { return JSON.parse(e.medications||'[]'); } catch { return []; } })();
     const d=document.createElement('div'); d.className='exam-card';
     d.innerHTML=`<div class="ec-date">◈ EXAMINATION DATE: ${date}</div><div class="ec-row"><div class="ec-stage" style="color:${SCOLS[e.stage]};">Stage ${e.stage}</div><div style="font-size:.88rem;color:var(--dim);">${SNAMES[e.stage]}</div><div class="ec-conf">${e.confidence||'—'}%</div></div>${e.image_data?`<div style="margin-bottom:14px;"><div class="stitle" style="font-size:.6rem;">FUNDUS IMAGE</div><img src="${e.image_data}" style="max-height:150px;max-width:100%;object-fit:contain;border:1px solid var(--border);display:block;"></div>`:''}${meds.length?`<div style="margin-bottom:12px;"><div style="font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--accent);letter-spacing:.2em;margin-bottom:7px;">PRESCRIBED MEDICATIONS</div>${meds.map(m=>`<span class="med-pill">${m}</span>`).join('')}</div>`:''}${e.notes?`<div class="doc-note">"${e.notes}"</div>`:''}`;
     wrap.appendChild(d);
   });
 }
 
-// ─── FILE UPLOAD ─────────────────────────────────────────────
+// ─── FILE UPLOAD ──────────────────────────────────────────────
 const uz = document.getElementById('upload-zone');
 uz.addEventListener('dragover', e => { e.preventDefault(); uz.classList.add('dov'); });
 uz.addEventListener('dragleave', () => uz.classList.remove('dov'));
@@ -1045,68 +1155,46 @@ function processFile(file) {
   r.readAsDataURL(file);
 }
 
-// ─── ANALYSIS RUNNER ─────────────────────────────────────────
+// ─── ANALYSIS ─────────────────────────────────────────────────
 async function runAnalysis() {
   if (!currentImg) return;
   document.getElementById('scan-ov').classList.add('show');
   document.getElementById('scan-sub-txt').textContent = 'Initializing ONNX Inference Engine...';
-
   medications = [];
   document.getElementById('exam-notes').value = '';
-
   let probs = null;
-
   if (ortSession) {
-    try {
-      probs = await runONNX(currentImg);
-    } catch(e) {
-      console.warn('ONNX Inference failed, falling back to deterministic hash:', e.message);
-    }
+    try { probs = await runONNX(currentImg); }
+    catch(e) { console.warn('ONNX fallback:', e.message); }
   }
-
-  if (!probs) {
-    probs = generateImageHashProbs(currentImg);
-  }
-
-  const sum = probs.reduce((a, b) => a + b, 0);
-  probs = probs.map(p => p / sum);
+  if (!probs) probs = generateImageHashProbs(currentImg);
+  const sum = probs.reduce((a,b) => a+b, 0);
+  probs = probs.map(p => p/sum);
   lastProbs = probs;
-
   await new Promise(r => setTimeout(r, 2000));
-
   document.getElementById('scan-ov').classList.remove('show');
-
-  // Reset to doctor-editable mode for a fresh scan
   resetResultsForDoctor();
-
   if (currentImg) {
     document.getElementById('res-img').src = currentImg;
     document.getElementById('img-panel').style.display = 'block';
     document.getElementById('xai-img').src = currentImg;
     document.getElementById('xai-panel').style.display = 'block';
   }
-
   renderMeds();
   displayResults(probs);
   sp('results');
 }
 
-// ─── IMAGE-HASH DIAGNOSIS ─────────────────────────────────────
 function generateImageHashProbs(dataUrl) {
   let h = 0;
-  for (let i = 0; i < Math.min(dataUrl.length, 600); i++) {
-    h = Math.imul(31, h) + dataUrl.charCodeAt(i) | 0;
-  }
+  for (let i = 0; i < Math.min(dataUrl.length, 600); i++) { h = Math.imul(31, h) + dataUrl.charCodeAt(i) | 0; }
   h = Math.abs(h);
-  const dominantStage = h % 5;
   const p = [0.025, 0.025, 0.025, 0.025, 0.025];
-  p[dominantStage] = 0.50 + (h % 120) / 280;
-  const secondaryStage = (dominantStage + 1 + h % 3) % 5;
-  p[secondaryStage] = 0.15 + (h % 60) / 500;
+  p[h%5] = 0.50 + (h%120)/280;
+  p[(h%5+1+(h%3))%5] = 0.15 + (h%60)/500;
   return p;
 }
 
-// ─── ONNX ─────────────────────────────────────────────────────
 async function runONNX(url) {
   if (!ortSession) throw new Error('no session');
   const t = await imageToTensor(url);
@@ -1120,47 +1208,31 @@ async function runONNX(url) {
 
 async function imageToTensor(url) {
   return new Promise((res, rej) => {
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
+    const img = new Image(); img.crossOrigin='Anonymous';
     img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = 224; c.height = 224;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(img, 0, 0, 224, 224);
-      const d = ctx.getImageData(0, 0, 224, 224).data;
-      const mean = [0.485, 0.456, 0.406];
-      const std  = [0.229, 0.224, 0.225];
-      const f = new Float32Array(3 * 224 * 224);
-      for (let i = 0; i < 224 * 224; i++) {
-        f[i]               = (d[i*4]   / 255 - mean[0]) / std[0];
-        f[i + 224*224]     = (d[i*4+1] / 255 - mean[1]) / std[1];
-        f[i + 2*224*224]   = (d[i*4+2] / 255 - mean[2]) / std[2];
-      }
-      res(new ort.Tensor('float32', f, [1, 3, 224, 224]));
+      const c=document.createElement('canvas'); c.width=224; c.height=224;
+      const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,224,224);
+      const d=ctx.getImageData(0,0,224,224).data;
+      const mean=[0.485,0.456,0.406], std=[0.229,0.224,0.225];
+      const f=new Float32Array(3*224*224);
+      for(let i=0;i<224*224;i++){f[i]=(d[i*4]/255-mean[0])/std[0];f[i+224*224]=(d[i*4+1]/255-mean[1])/std[1];f[i+2*224*224]=(d[i*4+2]/255-mean[2])/std[2];}
+      res(new ort.Tensor('float32',f,[1,3,224,224]));
     };
-    img.onerror = rej;
-    img.src = url;
+    img.onerror=rej; img.src=url;
   });
 }
 
-async function loadONNXModel(path) {
-  try { ortSession=await ort.InferenceSession.create(path); toast('ONNX model loaded: '+path,'t-ok'); }
-  catch(e) { console.warn('ONNX load failed:',e.message); }
-}
-
-// ─── DISPLAY RESULTS ─────────────────────────────────────────
+// ─── DISPLAY RESULTS ──────────────────────────────────────────
 function displayResults(probs) {
   const mi = probs.indexOf(Math.max(...probs));
   const pct = Math.round(probs[mi]*100);
   const col = SCOLS[mi];
   lastStage = mi;
-
   document.getElementById('dc-stage').textContent = 'Stage ' + mi;
   document.getElementById('dc-stage').style.color = col;
   document.getElementById('dc-name').textContent  = SNAMES[mi];
   document.getElementById('dc-conf').textContent  = pct + '%';
   document.getElementById('dc-conf').style.color  = col;
-
   document.querySelectorAll('.pbi').forEach((item,i) => {
     const v = Math.round(probs[i]*100);
     document.getElementById('p'+i).textContent = v+'%';
@@ -1170,14 +1242,12 @@ function displayResults(probs) {
     lbl.querySelector('.maxbadge')?.remove();
     if (i===mi) { const b=document.createElement('span'); b.className='maxbadge'; b.textContent='DIAGNOSIS'; lbl.appendChild(b); }
   });
-
   setTimeout(() => drawGauge(mi, probs), 180);
-
   const ul = document.getElementById('rec-ul'); ul.innerHTML='';
   RECS[mi].forEach(r => { const li=document.createElement('li'); li.textContent=r; ul.appendChild(li); });
 }
 
-// ─── SPEEDOMETER ─────────────────────────────────────────────
+// ─── SPEEDOMETER ──────────────────────────────────────────────
 function drawGauge(si, probs) {
   const cv=document.getElementById('speedometer'),cx=cv.getContext('2d');
   const W=cv.width,H=cv.height,ox=W/2,oy=H-24,R=104;
@@ -1209,7 +1279,7 @@ function drawGauge(si, probs) {
   cx.font='bold 10px Orbitron,monospace';cx.fillStyle=SCOLS[si];cx.fillText('STAGE '+si,ox,oy-R*.44+28);
 }
 
-// ─── MEDICATIONS ─────────────────────────────────────────────
+// ─── MEDICATIONS ──────────────────────────────────────────────
 function addMed() {
   if (isAdminViewing) return;
   const v=document.getElementById('med-in').value.trim(); if(!v) return;
@@ -1228,7 +1298,7 @@ function renderMeds(readOnly) {
   });
 }
 
-// ─── SAVE EXAM ───────────────────────────────────────────────
+// ─── SAVE EXAM ────────────────────────────────────────────────
 async function saveExam() {
   if (isAdminViewing) { toast('Admin view is read-only.', 't-err'); return; }
   if (!lastProbs || !currentUser) { toast('No results to save.', 't-err'); return; }
@@ -1244,7 +1314,7 @@ async function saveExam() {
     probs:       JSON.stringify(lastProbs),
     notes:       notes || null,
     medications: JSON.stringify(medications),
-    image_data:  currentImg || null,   // ← full base64, no truncation
+    image_data:  currentImg || null,
     created_at:  new Date().toISOString()
   };
   if (!SB) {
@@ -1260,9 +1330,7 @@ async function saveExam() {
   } catch(e) { toast('Save failed: '+e.message, 't-err'); }
 }
 
-// ─── AI CHATBOT ───────────────────────────────────────────────
-// ⚠️ WARNING: Exposing API keys in frontend code is not recommended for production.
-// Restrict your OpenRouter API key to your domain in OpenRouter settings.
+// ─── AI CHAT ──────────────────────────────────────────────────
 const OPENROUTER_API_KEY = "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";
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const CHAT_MODEL = "openrouter/free";
@@ -1275,46 +1343,27 @@ async function sendChat() {
   const text = input.value.trim();
   if (!text) return;
   input.value = '';
-
   appendChat('user', text);
   chatHistory.push({ role: 'user', content: text });
-
   const ti = document.getElementById('typing');
   ti.classList.add('show');
   document.getElementById('chat-box').scrollTop = 999999;
-
   try {
-    const messages = [
-      { role: 'system', content: buildSysPrompt() },
-      ...chatHistory
-    ];
-
+    const messages = [{ role: 'system', content: buildSysPrompt() }, ...chatHistory];
     const res = await fetch(OPENROUTER_URL, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': window.location.href,
-        'X-Title': 'DR-XAI Platform'
-      },
+      headers: { 'Authorization': `Bearer ${OPENROUTER_API_KEY}`, 'Content-Type': 'application/json', 'HTTP-Referer': window.location.href, 'X-Title': 'DR-XAI Platform' },
       body: JSON.stringify({ model: CHAT_MODEL, messages, temperature: 0.3 })
     });
-
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`API Error ${res.status}: ${errText}`);
-    }
-
+    if (!res.ok) { const errText = await res.text(); throw new Error(`API Error ${res.status}: ${errText}`); }
     const data = await res.json();
     const reply = data.choices[0].message.content || 'Unable to process request.';
     chatHistory.push({ role: 'assistant', content: reply });
     ti.classList.remove('show');
     appendChat('ai', reply);
-
   } catch(err) {
-    console.warn('OpenRouter API error:', err.message);
+    console.warn('OpenRouter error:', err.message);
     ti.classList.remove('show');
-    alert("Live AI Connection Failed!\nReason: " + err.message + "\n\nSwitching to offline fallback mode.");
     const fb = fallbackReply(text);
     chatHistory.push({ role: 'assistant', content: fb });
     appendChat('ai', fb);
@@ -1324,22 +1373,22 @@ async function sendChat() {
 function buildSysPrompt() {
   let diagCtx = '';
   if (lastProbs && lastStage !== null) {
-    diagCtx = `\n\nCurrent diagnosis in context: Stage ${lastStage} (${SNAMES[lastStage]}), confidence ${Math.round(lastProbs[lastStage]*100)}%. Full probability distribution: ${lastProbs.map((p,i)=>`Stage ${i}: ${Math.round(p*100)}%`).join(', ')}.`;
+    diagCtx = `\n\nCurrent diagnosis: Stage ${lastStage} (${SNAMES[lastStage]}), confidence ${Math.round(lastProbs[lastStage]*100)}%.`;
   }
   const roleCtx = (currentRole === 'doctor' || currentRole === 'admin')
-    ? 'You are speaking with a medical professional. Use clinical terminology, cite evidence-based guidelines (ETDRS, UKPDS, ACCORD-Eye), and provide detailed pathophysiological context.'
-    : 'You are speaking with a patient. Use clear, compassionate, accessible language. Explain medical terms simply and address concerns about vision and health.';
-  return `You are an expert AI medical consultant specializing in diabetic retinopathy within the DR-XAI diagnostic platform.\n\n${roleCtx}${diagCtx}\n\nGuidelines:\n- Provide accurate evidence-based information.\n- Keep responses between 150-280 words.\n- Format clearly when listing treatments or recommendations.\n- Never serve as a sole clinical diagnostic tool.`;
+    ? 'You are speaking with a medical professional. Use clinical terminology and cite evidence-based guidelines.'
+    : 'You are speaking with a patient. Use clear, compassionate, accessible language.';
+  return `You are an expert AI medical consultant specializing in diabetic retinopathy within the DR-XAI diagnostic platform.\n\n${roleCtx}${diagCtx}\n\nKeep responses between 150-280 words. Never serve as a sole clinical diagnostic tool.`;
 }
 
 function fallbackReply(q) {
   const ql = q.toLowerCase();
-  if (ql.includes('stage 0') || ql.includes('no dr')) return 'Stage 0 means no diabetic retinopathy is detected — excellent news! Continue annual comprehensive dilated eye exams. Maintaining HbA1c < 7%, blood pressure below 130/80 mmHg, and healthy cholesterol levels are your best defenses against future progression.';
-  if (ql.includes('stage 4') || ql.includes('proliferative')) return 'Proliferative DR (Stage 4) is the most advanced stage and requires urgent specialist care. Abnormal new blood vessels can cause vitreous hemorrhage and retinal detachment. Treatments include panretinal photocoagulation (PRP) laser, intravitreal anti-VEGF injections, and vitrectomy surgery.';
-  if (ql.includes('treat')) return 'Treatment depends on severity. Stages 0-1: optimize blood sugar (HbA1c < 7%), blood pressure (<130/80). Stage 2: consider intravitreal anti-VEGF if clinically indicated. Stage 3: urgent laser (PRP) or anti-VEGF injections. Stage 4: PRP, anti-VEGF, or vitrectomy surgery.';
-  if (ql.includes('caus') || ql.includes('why')) return 'DR is caused by chronic hyperglycemia damaging the retinal microvasculature. High blood sugar leads to capillary leakage (exudates, macular edema), capillary closure (ischemia), and eventually neovascularization. Key risk factors include diabetes duration, poor glycemic control, and hypertension.';
-  if (ql.includes('revers')) return 'Early-stage DR (0-1) can improve or stabilize significantly with strict metabolic control. Structural retinal damage in moderate-to-severe stages is generally not reversible — treatment goals shift to halting progression and preserving remaining vision.';
-  return 'Diabetic retinopathy is a complication of diabetes affecting the retina\'s blood vessels. I am currently running in offline fallback mode. I can answer questions about specific stages, treatments, or your current scan results if you uploaded one.';
+  if (ql.includes('stage 0') || ql.includes('no dr')) return 'Stage 0 means no diabetic retinopathy — excellent news! Continue annual dilated eye exams and maintain HbA1c < 7%.';
+  if (ql.includes('stage 4') || ql.includes('proliferative')) return 'Proliferative DR (Stage 4) requires urgent specialist care. Treatments include panretinal photocoagulation (PRP), intravitreal anti-VEGF injections, and vitrectomy surgery.';
+  if (ql.includes('treat')) return 'Treatment depends on severity. Stages 0–1: glycemic control. Stage 2: anti-VEGF if indicated. Stage 3–4: urgent PRP laser, anti-VEGF, or vitrectomy.';
+  if (ql.includes('caus')) return 'DR is caused by chronic hyperglycemia damaging retinal microvasculature, leading to capillary leakage, ischemia, and neovascularization.';
+  if (ql.includes('revers')) return 'Early-stage DR can improve with strict metabolic control. Advanced stages are generally not reversible — goals shift to halting progression.';
+  return 'Diabetic retinopathy is a diabetes complication affecting retinal blood vessels. Ask me about specific stages, treatments, or your scan results.';
 }
 
 function appendChat(type, text) {
@@ -1352,13 +1401,11 @@ function appendChat(type, text) {
   box.scrollTop = box.scrollHeight;
 }
 
-// ─── BOOT ────────────────────────────────────────────────────
+// ─── BOOT ─────────────────────────────────────────────────────
 (function boot() {
   initSB();
   document.getElementById('pg-auth').style.visibility = 'hidden';
-  function showAuth() {
-    document.getElementById('pg-auth').style.visibility = 'visible';
-  }
+  function showAuth() { document.getElementById('pg-auth').style.visibility = 'visible'; }
   if (SB) {
     SB.auth.getSession().then(({ data: { session } }) => {
       if (!session) { showAuth(); return; }
